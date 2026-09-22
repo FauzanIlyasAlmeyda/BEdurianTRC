@@ -16,10 +16,11 @@ return new class extends Migration
             'consumer_profiles',
         ] as $tableName) {
             Schema::table($tableName, function (Blueprint $table): void {
-                $table->string('village', 100)->nullable();
-                $table->string('district', 100)->nullable();
-                $table->string('city', 100)->nullable();
-                $table->string('province', 100)->nullable();
+                foreach (['village', 'district', 'city', 'province'] as $column) {
+                    if (! Schema::hasColumn($table->getTable(), $column)) {
+                        $table->string($column, 100)->nullable();
+                    }
+                }
             });
         }
     }
@@ -34,7 +35,13 @@ return new class extends Migration
             'consumer_profiles',
         ] as $tableName) {
             Schema::table($tableName, function (Blueprint $table): void {
-                $table->dropColumn(['village', 'district', 'city', 'province']);
+                $columns = array_values(array_filter(
+                    ['village', 'district', 'city', 'province'],
+                    fn (string $column): bool => Schema::hasColumn($table->getTable(), $column),
+                ));
+                if ($columns !== []) {
+                    $table->dropColumn($columns);
+                }
             });
         }
     }
