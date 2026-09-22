@@ -240,6 +240,9 @@ class CollectorController extends Controller
 
         $data = $request->validate([
             'destination_type' => ['required', Rule::in(ShipmentDestination::values())],
+            'destination_user_id' => ['required', 'integer', 'exists:users,id'],
+            'destination_name' => ['required', 'string', 'max:150'],
+            'destination_location' => ['required', 'string'],
             'source_batch_codes' => ['nullable', 'array', 'min:1'],
             'source_batch_codes.*' => ['distinct'],
             'source_batch_codes.*' => ['string', 'exists:harvest_batches,code'],
@@ -282,6 +285,9 @@ class CollectorController extends Controller
                 'code' => CodeGenerator::shipment(),
                 'collector_user_id' => $user->id,
                 'destination_type' => $data['destination_type'],
+                'destination_user_id' => $data['destination_user_id'],
+                'destination_name' => $data['destination_name'],
+                'destination_location' => $data['destination_location'],
                 'total_weight_kg' => $batches->sum('quantity_kg'),
                 'total_fruit_count' => $batches->sum('fruit_count') ?: 0,
                 'packaged_at' => $data['packaged_at'] ?? now(),
