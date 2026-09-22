@@ -38,6 +38,39 @@ class CollectorController extends Controller
         );
     }
 
+    /** Daftar akun tujuan pengiriman yang benar-benar terdaftar dan aktif. */
+    public function shipmentRecipients(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Pengepul->value);
+
+        return ApiResponse::success(
+            User::query()->where('is_active', true)->whereKeyNot($user->id)
+                ->whereIn('role', [UserRole::Distributor->value, UserRole::Umkm->value, UserRole::Konsumen->value, UserRole::Pengepul->value])
+                ->with(['distributorProfile', 'umkmProfile', 'consumerProfile', 'collectorProfile'])
+                ->orderBy('first_name')->get()->map(function (User $recipient): array {
+                    $profile = match ($recipient->role) {
+                        UserRole::Distributor->value => $recipient->distributorProfile,
+                        UserRole::Umkm->value => $recipient->umkmProfile,
+                        UserRole::Konsumen->value => $recipient->consumerProfile,
+                        default => $recipient->collectorProfile,
+                    };
+                    $name = match ($recipient->role) {
+                        UserRole::Distributor->value, UserRole::Pengepul->value => $profile?->business_name,
+                        UserRole::Umkm->value => $profile?->name,
+                        UserRole::Konsumen->value => $profile?->display_name,
+                        default => null,
+                    };
+                    return [
+                        'userId' => (string) $recipient->id,
+                        'name' => filled($name) ? $name : $recipient->full_name,
+                        'address' => $profile?->address ?? '',
+                        'destinationType' => $recipient->role === UserRole::Pengepul->value ? 'collector' : $recipient->role,
+                    ];
+                })->values()->all()
+        );
+    }
+
     public function storeWarehouse(Request $request): JsonResponse
     {
         $user = $request->user();
