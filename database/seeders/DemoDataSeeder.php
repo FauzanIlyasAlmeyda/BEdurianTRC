@@ -266,6 +266,7 @@ class DemoDataSeeder extends Seeder
                 'village' => 'Pakis',
                 'district' => 'Pakis',
                 'city' => 'Jember',
+                'province' => 'Jawa Timur',
                 'contact' => $farmer->phone,
             ]
         );
@@ -275,6 +276,10 @@ class DemoDataSeeder extends Seeder
             [
                 'business_name' => 'Pengepul Jember',
                 'address' => 'Kabupaten Jember',
+                'village' => 'Pakis',
+                'district' => 'Pakis',
+                'city' => 'Jember',
+                'province' => 'Jawa Timur',
                 'contact' => $collector->phone,
             ]
         );
@@ -284,6 +289,10 @@ class DemoDataSeeder extends Seeder
             [
                 'business_name' => 'Distributor Jember',
                 'address' => 'Kabupaten Jember',
+                'village' => 'Pakis',
+                'district' => 'Pakis',
+                'city' => 'Jember',
+                'province' => 'Jawa Timur',
                 'contact' => $distributor->phone,
             ]
         );
@@ -295,6 +304,10 @@ class DemoDataSeeder extends Seeder
                 'owner_name' => $umkm->full_name,
                 'about' => 'UMKM olahan durian untuk demo aplikasi.',
                 'address' => 'Kabupaten Jember, Jawa Timur',
+                'village' => 'Pakis',
+                'district' => 'Pakis',
+                'city' => 'Jember',
+                'province' => 'Jawa Timur',
                 'contact' => $umkm->phone,
             ]
         );
@@ -304,6 +317,10 @@ class DemoDataSeeder extends Seeder
             [
                 'display_name' => $consumer->full_name,
                 'address' => 'Kabupaten Jember, Jawa Timur',
+                'village' => 'Pakis',
+                'district' => 'Pakis',
+                'city' => 'Jember',
+                'province' => 'Jawa Timur',
                 'phone' => $consumer->phone,
             ]
         );

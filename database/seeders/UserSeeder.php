@@ -16,52 +16,52 @@ class UserSeeder extends Seeder
         $users = [
 
             [
-                'first_name' => 'Budi',
-                'last_name' => 'Petani',
+                'first_name' => 'Fauzan',
+                'last_name' => 'llyas',
                 'phone' => '081111111111',
-                'email' => 'petani@duriantrace.com',
+                'email' => '123@gmail.com',
                 'username' => 'petani',
-                'password' => 'password',
+                'password' => 'Fauzan123_',
                 'role' => UserRole::Petani->value,
             ],
 
             [
-                'first_name' => 'Andi',
-                'last_name' => 'Pengepul',
+                'first_name' => 'Misbah',
+                'last_name' => 'Munir',
                 'phone' => '082222222222',
-                'email' => 'pengepul@duriantrace.com',
+                'email' => '321@gmail.com',
                 'username' => 'pengepul',
-                'password' => 'password',
+                'password' => 'Fauzan123_',
                 'role' => UserRole::Pengepul->value,
             ],
 
             [
-                'first_name' => 'Siti',
-                'last_name' => 'Distributor',
+                'first_name' => 'Miftahus',
+                'last_name' => 'Haqqi',
                 'phone' => '083333333333',
-                'email' => 'distributor@duriantrace.com',
+                'email' => '654@gmail.com',
                 'username' => 'distributor',
-                'password' => 'password',
+                'password' => 'Fauzan123_',
                 'role' => UserRole::Distributor->value,
             ],
 
             [
-                'first_name' => 'Rina',
-                'last_name' => 'UMKM',
+                'first_name' => 'Ahmad',
+                'last_name' => 'Baihaqi',
                 'phone' => '084444444444',
-                'email' => 'umkm@duriantrace.com',
+                'email' => '456@gmail.com',
                 'username' => 'umkm',
-                'password' => 'password',
+                'password' => 'Fauzan123_',
                 'role' => UserRole::Umkm->value,
             ],
 
             [
-                'first_name' => 'Doni',
-                'last_name' => 'Konsumen',
+                'first_name' => 'Adiyatma',
+                'last_name' => 'Eka',
                 'phone' => '085555555555',
-                'email' => 'konsumen@duriantrace.com',
+                'email' => '789@gmail.com',
                 'username' => 'konsumen',
-                'password' => 'password',
+                'password' => 'Fauzan123_',
                 'role' => UserRole::Konsumen->value,
             ]
 
