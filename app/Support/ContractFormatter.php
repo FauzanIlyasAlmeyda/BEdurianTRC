@@ -96,6 +96,8 @@ class ContractFormatter
                 : (float) $batch->received_quantity_kg,
             'received_fruit_count' => $batch->received_fruit_count,
             'receivedFruitCount' => $batch->received_fruit_count,
+            'warehouse_id' => $batch->warehouse_id,
+            'warehouseId' => $batch->warehouse_id,
             'verified_grade' => $batch->verified_grade,
             'verifiedGrade' => $batch->verified_grade,
             'quality_notes' => $batch->quality_notes,

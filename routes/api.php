@@ -36,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('/profile', [CollectorController::class, 'profile']);
         Route::put('/profile', [CollectorController::class, 'updateProfile']);
         Route::get('/stock', [CollectorController::class, 'stock']);
+        Route::get('/batches', [CollectorController::class, 'batches']);
         Route::get('/warehouses', [CollectorController::class, 'warehouses']);
         Route::get('/shipment-recipients', [CollectorController::class, 'shipmentRecipients']);
         Route::post('/warehouses', [CollectorController::class, 'storeWarehouse']);

@@ -225,6 +225,14 @@ class CollectorController extends Controller
         );
     }
 
+    public function batches(Request $request): JsonResponse
+    {
+        $this->ensureRole($request->user(), UserRole::Pengepul->value);
+        return ApiResponse::success(HarvestBatch::query()->with('gradeBreakdowns')
+            ->whereIn('status', [HarvestBatchStatus::Created->value, HarvestBatchStatus::VerifiedByCollector->value])
+            ->latest()->get()->map(fn (HarvestBatch $batch): array => ContractFormatter::batch($batch))->values()->all());
+    }
+
     public function storeShipmentBatches(Request $request): JsonResponse
     {
         $user = $request->user();
