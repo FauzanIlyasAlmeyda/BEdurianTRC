@@ -44,9 +44,10 @@ class FarmerController extends Controller
             'full_name' => ['nullable', 'string', 'max:150'],
             'role_label' => ['nullable', 'string', 'max:50'],
             'location' => ['nullable', 'string', 'max:191'],
-            'village' => ['nullable', 'string', 'max:100'],
-            'district' => ['nullable', 'string', 'max:100'],
-            'city' => ['nullable', 'string', 'max:100'],
+            'village' => ['required', 'string', 'max:100'],
+            'district' => ['required', 'string', 'max:100'],
+            'city' => ['required', 'string', 'max:100'],
+            'province' => ['required', 'string', 'max:100'],
             'contact' => ['nullable', 'string', 'max:50'],
             'avatar_path' => ['nullable', 'string', 'max:255'],
         ]);

@@ -19,6 +19,7 @@ class FarmerProfile extends Model
         'village',
         'district',
         'city',
+        'province',
         'contact',
         'avatar_path',
     ];

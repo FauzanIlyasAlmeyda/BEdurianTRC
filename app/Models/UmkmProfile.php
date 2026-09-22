@@ -17,6 +17,10 @@ class UmkmProfile extends Model
         'owner_name',
         'about',
         'address',
+        'village',
+        'district',
+        'city',
+        'province',
         'contact',
         'image_path',
     ];

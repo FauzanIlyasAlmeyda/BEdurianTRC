@@ -50,6 +50,10 @@ class UmkmController extends Controller
             'owner_name' => ['nullable', 'string', 'max:150'],
             'about' => ['nullable', 'string'],
             'address' => ['nullable', 'string'],
+            'village' => ['required', 'string', 'max:100'],
+            'district' => ['required', 'string', 'max:100'],
+            'city' => ['required', 'string', 'max:100'],
+            'province' => ['required', 'string', 'max:100'],
             'contact' => ['nullable', 'string', 'max:50'],
             'image_path' => ['nullable', 'string', 'max:255'],
         ]);

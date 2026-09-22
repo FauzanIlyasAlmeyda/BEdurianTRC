@@ -15,6 +15,10 @@ class ConsumerProfile extends Model
         'user_id',
         'display_name',
         'address',
+        'village',
+        'district',
+        'city',
+        'province',
         'phone',
         'avatar_path',
     ];

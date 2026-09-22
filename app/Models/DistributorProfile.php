@@ -15,6 +15,10 @@ class DistributorProfile extends Model
         'user_id',
         'business_name',
         'address',
+        'village',
+        'district',
+        'city',
+        'province',
         'contact',
         'avatar_path',
     ];

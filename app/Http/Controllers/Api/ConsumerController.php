@@ -43,6 +43,10 @@ class ConsumerController extends Controller
         $data = $request->validate([
             'display_name' => ['nullable', 'string', 'max:150'],
             'address' => ['nullable', 'string'],
+            'village' => ['required', 'string', 'max:100'],
+            'district' => ['required', 'string', 'max:100'],
+            'city' => ['required', 'string', 'max:100'],
+            'province' => ['required', 'string', 'max:100'],
             'phone' => ['nullable', 'string', 'max:50'],
             'avatar_path' => ['nullable', 'string', 'max:255'],
         ]);
