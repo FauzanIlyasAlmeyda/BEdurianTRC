@@ -22,6 +22,10 @@ class AuthTest extends TestCase
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'role' => 'petani',
+            'village' => 'Pakis',
+            'district' => 'Panti',
+            'city' => 'Jember',
+            'province' => 'Jawa Timur',
         ]);
 
         $response
@@ -43,6 +47,67 @@ class AuthTest extends TestCase
             'username' => 'budi.petani',
             'role' => 'petani',
         ]);
+        $this->assertDatabaseHas('farmer_profiles', [
+            'village' => 'Pakis',
+            'district' => 'Panti',
+            'city' => 'Jember',
+            'province' => 'Jawa Timur',
+        ]);
+    }
+
+    public function test_registration_requires_all_address_parts(): void
+    {
+        $response = $this->postJson('/api/register', [
+            'first_name' => 'Budi',
+            'last_name' => 'Petani',
+            'phone' => '081234567890',
+            'email' => 'budi@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'role' => 'petani',
+            'village' => 'Pakis',
+            'district' => 'Panti',
+            'city' => 'Jember',
+        ]);
+
+        $response->assertUnprocessable()->assertJsonValidationErrors(['province']);
+        $this->assertDatabaseMissing('users', ['email' => 'budi@example.com']);
+    }
+
+    public function test_registration_creates_address_profile_for_every_role(): void
+    {
+        $profiles = [
+            'petani' => 'farmer_profiles',
+            'pengepul' => 'collector_profiles',
+            'umkm' => 'umkm_profiles',
+            'distributor' => 'distributor_profiles',
+            'konsumen' => 'consumer_profiles',
+        ];
+
+        $phoneSuffix = 10;
+        foreach ($profiles as $index => $table) {
+            $response = $this->postJson('/api/register', [
+                'first_name' => 'User',
+                'last_name' => ucfirst($index),
+                'phone' => '0812345678'.str_pad((string) $phoneSuffix++, 2, '0', STR_PAD_LEFT),
+                'email' => "{$index}@example.com",
+                'password' => 'password123',
+                'password_confirmation' => 'password123',
+                'role' => $index,
+                'village' => 'Pakis',
+                'district' => 'Panti',
+                'city' => 'Jember',
+                'province' => 'Jawa Timur',
+            ]);
+
+            $response->assertCreated();
+            $this->assertDatabaseHas($table, [
+                'village' => 'Pakis',
+                'district' => 'Panti',
+                'city' => 'Jember',
+                'province' => 'Jawa Timur',
+            ]);
+        }
     }
 
     public function test_user_can_login_using_email_identifier(): void
