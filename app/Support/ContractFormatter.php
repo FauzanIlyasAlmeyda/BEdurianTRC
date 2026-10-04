@@ -20,6 +20,7 @@ class ContractFormatter
     {
         return [
             'id' => $user->id,
+            'public_account_id' => $user->public_account_id,
             'first_name' => $user->first_name,
             'last_name' => $user->last_name,
             'phone' => $user->phone,
@@ -88,6 +89,10 @@ class ContractFormatter
             'harvest_date' => $batch->harvest_date?->toDateString(),
             'harvestDate' => $batch->harvest_date?->toDateString(),
             'status' => $batch->status,
+            'recipient_user_id' => $batch->recipient_user_id,
+            'recipient_role' => $batch->recipient_role === 'pengepul'
+                ? 'collector'
+                : $batch->recipient_role,
             'received_quantity_kg' => $batch->received_quantity_kg === null
                 ? null
                 : (float) $batch->received_quantity_kg,

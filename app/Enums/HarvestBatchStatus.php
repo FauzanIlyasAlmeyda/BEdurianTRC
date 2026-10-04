@@ -9,6 +9,7 @@ enum HarvestBatchStatus: string
     case VerifiedByCollector = 'verifiedByCollector';
     case InDistribution = 'inDistribution';
     case ReceivedByUmkm = 'receivedByUmkm';
+    case ReceivedByDistributor = 'receivedByDistributor';
     case Processed = 'processed';
     case Sold = 'sold';
     case Rejected = 'rejected';

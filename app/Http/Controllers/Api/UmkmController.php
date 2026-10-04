@@ -84,6 +84,66 @@ class UmkmController extends Controller
         );
     }
 
+    public function batches(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Umkm->value);
+
+        return ApiResponse::success(HarvestBatch::query()
+            ->with('gradeBreakdowns')
+            ->where('recipient_user_id', $user->id)
+            ->where('recipient_role', UserRole::Umkm->value)
+            ->where('status', HarvestBatchStatus::Created->value)
+            ->latest()
+            ->get()
+            ->map(fn (HarvestBatch $batch): array => ContractFormatter::batch($batch))
+            ->values()
+            ->all());
+    }
+
+    public function receiveBatch(Request $request, string $code): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Umkm->value);
+
+        $batch = HarvestBatch::query()
+            ->where('code', $code)
+            ->where('recipient_user_id', $user->id)
+            ->where('recipient_role', UserRole::Umkm->value)
+            ->firstOrFail();
+
+        if ($batch->status !== HarvestBatchStatus::Created->value) {
+            return ApiResponse::error('Batch hanya bisa diterima saat status created', 422);
+        }
+
+        $data = $request->validate([
+            'received_quantity_kg' => ['required', 'numeric', 'min:0'],
+            'received_fruit_count' => ['required', 'integer', 'min:0'],
+            'quality_notes' => ['nullable', 'string'],
+        ]);
+
+        DB::transaction(function () use ($batch, $data, $user): void {
+            $batch->forceFill([
+                'status' => HarvestBatchStatus::ReceivedByUmkm->value,
+                'received_quantity_kg' => $data['received_quantity_kg'],
+                'received_fruit_count' => $data['received_fruit_count'],
+                'quality_notes' => $data['quality_notes'] ?? null,
+                'verified_by_user_id' => $user->id,
+                'verified_at' => now(),
+            ])->save();
+
+            Traceability::recordEvent($batch, 'Batch Diterima UMKM', $user, [
+                'status' => HarvestBatchStatus::ReceivedByUmkm->value,
+            ]);
+        });
+
+        return ApiResponse::success([
+            'code' => $batch->code,
+            'status' => $batch->status,
+            'batch' => ContractFormatter::batch($batch->load('gradeBreakdowns')),
+        ], 'Batch diterima UMKM');
+    }
+
     public function storeProduct(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -113,7 +173,10 @@ class UmkmController extends Controller
 
         if ($sourceBatches->isNotEmpty()) {
             $invalidSourceCodes = $sourceBatches
-                ->filter(fn (HarvestBatch $batch): bool => $batch->status !== HarvestBatchStatus::ReceivedByUmkm->value)
+                ->filter(fn (HarvestBatch $batch): bool => $batch->status !== HarvestBatchStatus::ReceivedByUmkm->value
+                    || ($batch->recipient_user_id !== null
+                        && ((int) $batch->recipient_user_id !== $user->id
+                            || $batch->recipient_role !== UserRole::Umkm->value)))
                 ->keys()
                 ->values()
                 ->all();

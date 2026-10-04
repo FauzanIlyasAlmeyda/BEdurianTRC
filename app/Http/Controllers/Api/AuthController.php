@@ -52,6 +52,9 @@ class AuthController extends Controller
                 'password' => $data['password'],
                 'role' => $data['role'],
             ]);
+            $user->forceFill([
+                'public_account_id' => $this->newPublicAccountId(),
+            ])->save();
 
             $addressParts = array_map(
                 static fn (string $key): string => trim($data[$key]),
@@ -126,6 +129,15 @@ class AuthController extends Controller
             'Registrasi berhasil',
             201
         );
+    }
+
+    private function newPublicAccountId(): string
+    {
+        do {
+            $accountId = '1'.str_pad((string) random_int(0, 999_999_999_999_999), 15, '0', STR_PAD_LEFT);
+        } while (User::query()->where('public_account_id', $accountId)->exists());
+
+        return $accountId;
     }
 
     /**

@@ -27,6 +27,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::put('/farms/{id}', [FarmerController::class, 'updateFarm']);
         Route::delete('/farms/{id}', [FarmerController::class, 'destroyFarm']);
         Route::get('/batches', [FarmerController::class, 'batches']);
+        Route::get('/recipients', [FarmerController::class, 'recipients']);
         Route::post('/batches', [FarmerController::class, 'storeBatch']);
         Route::get('/batches/{code}', [FarmerController::class, 'showBatch']);
         Route::patch('/batches/{code}', [FarmerController::class, 'updateBatch']);
@@ -60,6 +61,8 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('/shipments', [DistributorController::class, 'shipments']);
         Route::get('/shipments/{code}', [DistributorController::class, 'showShipment']);
         Route::post('/shipments/{code}/receipt', [DistributorController::class, 'storeReceipt']);
+        Route::get('/batches', [DistributorController::class, 'batches']);
+        Route::post('/batches/{code}/receive', [DistributorController::class, 'receiveBatch']);
     });
 
     Route::prefix('umkm')->group(function (): void {
@@ -69,6 +72,8 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::post('/products', [UmkmController::class, 'storeProduct']);
         Route::get('/orders', [UmkmController::class, 'orders']);
         Route::post('/orders', [UmkmController::class, 'storeOrder']);
+        Route::get('/batches', [UmkmController::class, 'batches']);
+        Route::post('/batches/{code}/receive', [UmkmController::class, 'receiveBatch']);
     });
 
     Route::prefix('consumer')->group(function (): void {

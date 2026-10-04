@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\HarvestBatchStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CollectorShipmentSource;
 use App\Models\HarvestBatch;
@@ -18,6 +19,14 @@ class PublicTraceController extends Controller
             ->with(['farm', 'farmer', 'events', 'gradeBreakdowns'])
             ->where('code', $batchCode)
             ->firstOrFail();
+
+        if ($batch->recipient_user_id !== null
+            && in_array($batch->status, [
+                HarvestBatchStatus::Created->value,
+                HarvestBatchStatus::Rejected->value,
+            ], true)) {
+            abort(404);
+        }
 
         $shipmentHistory = CollectorShipmentSource::query()
             ->with('shipment')
@@ -52,6 +61,7 @@ class PublicTraceController extends Controller
         $trace = ContractFormatter::trace($batch, $publicUrl);
 
         $trace['batch'] = ContractFormatter::batch($batch);
+        unset($trace['batch']['recipient_user_id'], $trace['batch']['recipient_role']);
         $trace['events'] = ContractFormatter::batchTimeline($batch);
         $trace['source_batches'] = [];
         $trace['downstream_products'] = $this->downstreamProducts($batch->id);

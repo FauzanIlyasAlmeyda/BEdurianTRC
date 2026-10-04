@@ -168,7 +168,8 @@ class CollectorController extends Controller
 
     public function stock(Request $request): JsonResponse
     {
-        $this->ensureRole($request->user(), UserRole::Pengepul->value);
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Pengepul->value);
 
         $batches = HarvestBatch::query()
             ->with(['farm', 'events'])
@@ -177,6 +178,14 @@ class CollectorController extends Controller
                 HarvestBatchStatus::VerifiedByCollector->value,
                 HarvestBatchStatus::InDistribution->value,
             ])
+            ->where(function ($query) use ($user): void {
+                $query->where(function ($legacy): void {
+                    $legacy->whereNull('recipient_user_id')->whereNull('recipient_role');
+                })->orWhere(function ($targeted) use ($user): void {
+                    $targeted->where('recipient_user_id', $user->id)
+                        ->whereIn('recipient_role', ['collector', UserRole::Pengepul->value]);
+                });
+            })
             ->latest()
             ->get();
 
@@ -231,9 +240,19 @@ class CollectorController extends Controller
 
     public function batches(Request $request): JsonResponse
     {
-        $this->ensureRole($request->user(), UserRole::Pengepul->value);
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Pengepul->value);
+
         return ApiResponse::success(HarvestBatch::query()->with('gradeBreakdowns')
             ->whereIn('status', [HarvestBatchStatus::Created->value, HarvestBatchStatus::VerifiedByCollector->value])
+            ->where(function ($query) use ($user): void {
+                $query->where(function ($legacy): void {
+                    $legacy->whereNull('recipient_user_id')->whereNull('recipient_role');
+                })->orWhere(function ($targeted) use ($user): void {
+                    $targeted->where('recipient_user_id', $user->id)
+                        ->whereIn('recipient_role', ['collector', UserRole::Pengepul->value]);
+                });
+            })
             ->latest()->get()->map(fn (HarvestBatch $batch): array => ContractFormatter::batch($batch))->values()->all());
     }
 
@@ -271,7 +290,8 @@ class CollectorController extends Controller
         }
 
         $invalidSourceCodes = $batches
-            ->filter(fn (HarvestBatch $batch): bool => $batch->status !== HarvestBatchStatus::VerifiedByCollector->value)
+            ->filter(fn (HarvestBatch $batch): bool => $batch->status !== HarvestBatchStatus::VerifiedByCollector->value
+                || ! $this->isCollectorBatchAccessible($batch, $user))
             ->keys()
             ->values()
             ->all();
@@ -427,6 +447,7 @@ class CollectorController extends Controller
         $batch = HarvestBatch::query()
             ->where('code', $code)
             ->firstOrFail();
+        abort_unless($this->isCollectorBatchAccessible($batch, $user), 404);
 
         if ($batch->status !== HarvestBatchStatus::Created->value) {
             return ApiResponse::error('Batch hanya bisa diverifikasi saat status created', 422);
@@ -505,6 +526,7 @@ class CollectorController extends Controller
         $batch = HarvestBatch::query()
             ->where('code', $code)
             ->firstOrFail();
+        abort_unless($this->isCollectorBatchAccessible($batch, $user), 404);
 
         if ($batch->status !== HarvestBatchStatus::Created->value) {
             return ApiResponse::error('Batch hanya bisa ditolak saat status created', 422);
@@ -537,6 +559,16 @@ class CollectorController extends Controller
     private function ensureRole(?User $user, string $role): void
     {
         abort_unless($user && $user->role === $role, 403, 'Forbidden');
+    }
+
+    private function isCollectorBatchAccessible(HarvestBatch $batch, User $user): bool
+    {
+        if ($batch->recipient_user_id === null && $batch->recipient_role === null) {
+            return true;
+        }
+
+        return (int) $batch->recipient_user_id === $user->id
+            && in_array($batch->recipient_role, ['collector', UserRole::Pengepul->value], true);
     }
 
     private function validateWarehouse(Request $request): array

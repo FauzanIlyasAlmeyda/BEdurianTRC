@@ -14,6 +14,8 @@ class HarvestBatch extends Model
     protected $fillable = [
         'code',
         'farmer_user_id',
+        'recipient_user_id',
+        'recipient_role',
         'farm_id',
         'farm_name_snapshot',
         'variety',

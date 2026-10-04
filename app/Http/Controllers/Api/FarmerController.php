@@ -126,6 +126,48 @@ class FarmerController extends Controller
         );
     }
 
+    public function recipients(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Petani->value);
+
+        $data = $request->validate([
+            'role' => ['required', Rule::in([
+                'collector',
+                UserRole::Pengepul->value,
+                UserRole::Umkm->value,
+                UserRole::Distributor->value,
+            ])],
+        ]);
+
+        $lookupRole = $data['role'] === 'collector'
+            ? UserRole::Pengepul->value
+            : $data['role'];
+
+        $recipients = User::query()
+            ->select(['id', 'public_account_id', 'first_name', 'last_name', 'role'])
+            ->where('role', $lookupRole)
+            ->where('is_active', true)
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get()
+            ->map(fn (User $recipient): array => [
+                'id' => $recipient->id,
+                'public_id' => $recipient->public_account_id ?? (string) $recipient->id,
+                'public_account_id' => $recipient->public_account_id ?? (string) $recipient->id,
+                'first_name' => $recipient->first_name,
+                'last_name' => $recipient->last_name,
+                'full_name' => $recipient->full_name,
+                'role' => $recipient->role === UserRole::Pengepul->value
+                    ? 'collector'
+                    : $recipient->role,
+            ])
+            ->values()
+            ->all();
+
+        return ApiResponse::success($recipients);
+    }
+
     public function storeBatch(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -133,6 +175,13 @@ class FarmerController extends Controller
 
         $data = $request->validate([
             'farm_id' => ['nullable', 'integer', 'exists:farms,id'],
+            'recipient_user_id' => ['required', 'integer', 'exists:users,id'],
+            'recipient_role' => ['required', Rule::in([
+                'collector',
+                UserRole::Pengepul->value,
+                UserRole::Umkm->value,
+                UserRole::Distributor->value,
+            ])],
             'farm_name_snapshot' => ['nullable', 'string', 'max:150'],
             'variety' => ['nullable', 'string', 'max:100'],
             'grade' => ['nullable', 'string', 'max:50'],
@@ -148,6 +197,26 @@ class FarmerController extends Controller
             'notes' => ['nullable', 'string'],
             'photo_path' => ['nullable', 'string', 'max:255'],
         ]);
+
+        $recipientRole = $data['recipient_role'] === 'collector'
+            ? UserRole::Pengepul->value
+            : $data['recipient_role'];
+
+        $recipient = User::query()
+            ->whereKey($data['recipient_user_id'])
+            ->where('role', $recipientRole)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $recipient) {
+            return ApiResponse::validation([
+                'recipient_user_id' => ['Penerima harus akun aktif dengan role yang dipilih.'],
+            ]);
+        }
+
+        $data['recipient_role'] = $data['recipient_role'] === UserRole::Pengepul->value
+            ? 'collector'
+            : $data['recipient_role'];
 
         $farm = isset($data['farm_id']) ? Farm::query()->whereKey($data['farm_id'])->first() : null;
 
@@ -176,6 +245,10 @@ class FarmerController extends Controller
             [
                 'code' => $batch->code,
                 'status' => $batch->status,
+                'recipient_user_id' => $batch->recipient_user_id,
+                'recipient_role' => $batch->recipient_role === UserRole::Pengepul->value
+                    ? 'collector'
+                    : $batch->recipient_role,
                 'harvest_date' => $batch->harvest_date?->toDateString(),
             ],
             'Batch berhasil dibuat'

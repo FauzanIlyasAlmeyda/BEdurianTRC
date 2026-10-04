@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\ReceiptCondition;
+use App\Enums\HarvestBatchStatus;
 use App\Enums\ShipmentStatus;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
@@ -108,12 +109,17 @@ class DistributorController extends Controller
 
     public function shipments(Request $request): JsonResponse
     {
-        $this->ensureRole($request->user(), UserRole::Distributor->value);
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Distributor->value);
 
         return ApiResponse::success(
             CollectorShipment::query()
                 ->with('sources.batch')
                 ->where('destination_type', 'distributor')
+                ->where(function ($query) use ($user): void {
+                    $query->whereNull('destination_user_id')
+                        ->orWhere('destination_user_id', $user->id);
+                })
                 ->latest()
                 ->get()
                 ->map(fn (CollectorShipment $shipment): array => ContractFormatter::shipment($shipment))
@@ -124,11 +130,16 @@ class DistributorController extends Controller
 
     public function showShipment(Request $request, string $code): JsonResponse
     {
-        $this->ensureRole($request->user(), UserRole::Distributor->value);
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Distributor->value);
 
         $shipment = CollectorShipment::query()
             ->with('sources.batch')
             ->where('destination_type', 'distributor')
+            ->where(function ($query) use ($user): void {
+                $query->whereNull('destination_user_id')
+                    ->orWhere('destination_user_id', $user->id);
+            })
             ->where('code', $code)
             ->firstOrFail();
 
@@ -158,6 +169,10 @@ class DistributorController extends Controller
         $shipment = CollectorShipment::query()
             ->with('sources.batch')
             ->where('destination_type', 'distributor')
+            ->where(function ($query) use ($user): void {
+                $query->whereNull('destination_user_id')
+                    ->orWhere('destination_user_id', $user->id);
+            })
             ->where('code', $code)
             ->firstOrFail();
 
@@ -238,6 +253,66 @@ class DistributorController extends Controller
             'condition' => $receipt->condition,
             'received_at' => $receipt->received_at?->toISOString(),
         ], 'Receipt berhasil disimpan');
+    }
+
+    public function batches(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Distributor->value);
+
+        return ApiResponse::success(HarvestBatch::query()
+            ->with('gradeBreakdowns')
+            ->where('recipient_user_id', $user->id)
+            ->where('recipient_role', UserRole::Distributor->value)
+            ->where('status', HarvestBatchStatus::Created->value)
+            ->latest()
+            ->get()
+            ->map(fn (HarvestBatch $batch): array => ContractFormatter::batch($batch))
+            ->values()
+            ->all());
+    }
+
+    public function receiveBatch(Request $request, string $code): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Distributor->value);
+
+        $batch = HarvestBatch::query()
+            ->where('code', $code)
+            ->where('recipient_user_id', $user->id)
+            ->where('recipient_role', UserRole::Distributor->value)
+            ->firstOrFail();
+
+        if ($batch->status !== HarvestBatchStatus::Created->value) {
+            return ApiResponse::error('Batch hanya bisa diterima saat status created', 422);
+        }
+
+        $data = $request->validate([
+            'received_quantity_kg' => ['required', 'numeric', 'min:0'],
+            'received_fruit_count' => ['required', 'integer', 'min:0'],
+            'quality_notes' => ['nullable', 'string'],
+        ]);
+
+        DB::transaction(function () use ($batch, $data, $user): void {
+            $batch->forceFill([
+                'status' => HarvestBatchStatus::ReceivedByDistributor->value,
+                'received_quantity_kg' => $data['received_quantity_kg'],
+                'received_fruit_count' => $data['received_fruit_count'],
+                'quality_notes' => $data['quality_notes'] ?? null,
+                'verified_by_user_id' => $user->id,
+                'verified_at' => now(),
+            ])->save();
+
+            Traceability::recordEvent($batch, 'Batch Diterima Distributor', $user, [
+                'status' => HarvestBatchStatus::ReceivedByDistributor->value,
+            ]);
+        });
+
+        return ApiResponse::success([
+            'code' => $batch->code,
+            'status' => $batch->status,
+            'batch' => ContractFormatter::batch($batch->load('gradeBreakdowns')),
+        ], 'Batch diterima distributor');
     }
 
     private function ensureRole(?User $user, string $role): void
