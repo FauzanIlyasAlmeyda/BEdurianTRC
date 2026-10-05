@@ -70,8 +70,11 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::put('/profile', [UmkmController::class, 'updateProfile']);
         Route::get('/products', [UmkmController::class, 'products']);
         Route::post('/products', [UmkmController::class, 'storeProduct']);
+        Route::delete('/products/{code}', [UmkmController::class, 'destroyProduct']);
         Route::get('/orders', [UmkmController::class, 'orders']);
         Route::post('/orders', [UmkmController::class, 'storeOrder']);
+        Route::patch('/orders/{code}', [UmkmController::class, 'updateOrder']);
+        Route::delete('/orders/{code}', [UmkmController::class, 'destroyOrder']);
         Route::get('/batches', [UmkmController::class, 'batches']);
         Route::post('/batches/{code}/receive', [UmkmController::class, 'receiveBatch']);
     });
