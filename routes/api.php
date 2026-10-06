@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CollectorController;
 use App\Http\Controllers\Api\ConsumerController;
 use App\Http\Controllers\Api\DistributorController;
+use App\Http\Controllers\Api\DistributorSaleController;
 use App\Http\Controllers\Api\FarmerController;
 use App\Http\Controllers\Api\PublicTraceController;
 use App\Http\Controllers\Api\UmkmController;
@@ -64,6 +65,10 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::post('/shipments/{code}/receipt', [DistributorController::class, 'storeReceipt']);
         Route::get('/batches', [DistributorController::class, 'batches']);
         Route::post('/batches/{code}/receive', [DistributorController::class, 'receiveBatch']);
+        Route::get('/inventory-batches', [DistributorSaleController::class, 'inventoryBatches']);
+        Route::get('/sale-recipients', [DistributorSaleController::class, 'recipients']);
+        Route::get('/sales', [DistributorSaleController::class, 'sales']);
+        Route::post('/sales', [DistributorSaleController::class, 'store']);
     });
 
     Route::prefix('umkm')->group(function (): void {
@@ -79,6 +84,12 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('/batches', [UmkmController::class, 'batches']);
         Route::get('/material-batches', [UmkmController::class, 'materialBatches']);
         Route::post('/batches/{code}/receive', [UmkmController::class, 'receiveBatch']);
+    });
+
+    Route::prefix('sales')->group(function (): void {
+        Route::get('/incoming', [DistributorSaleController::class, 'incoming']);
+        Route::post('/{code}/receive', [DistributorSaleController::class, 'receive']);
+        Route::post('/{code}/reject', [DistributorSaleController::class, 'reject']);
     });
 
     Route::prefix('consumer')->group(function (): void {
