@@ -197,6 +197,7 @@ class DistributorController extends Controller
             'destination_location' => ['nullable', 'string'],
             'discrepancy_note' => ['nullable', 'string'],
             'quality_note' => ['nullable', 'string'],
+            'warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('owner_user_id', $user->id)->where('owner_role', UserRole::Distributor->value)],
         ]);
 
         $expectedWeight = (float) $shipment->total_weight_kg;
@@ -237,8 +238,18 @@ class DistributorController extends Controller
 
             foreach ($shipment->sources as $source) {
                 if ($source->batch) {
+                    $source->batch->forceFill([
+                        'status' => HarvestBatchStatus::ReceivedByDistributor->value,
+                        'recipient_user_id' => $user->id,
+                        'recipient_role' => UserRole::Distributor->value,
+                        'received_quantity_kg' => $source->source_weight_kg,
+                        'received_fruit_count' => $source->source_fruit_count,
+                        'warehouse_id' => $data['warehouse_id'] ?? null,
+                        'verified_by_user_id' => $user->id,
+                        'verified_at' => $receipt->received_at,
+                    ])->save();
                     Traceability::recordEvent($source->batch, 'Receipt Distributor Dibuat', $user, [
-                        'status' => $source->batch->status,
+                        'status' => HarvestBatchStatus::ReceivedByDistributor->value,
                         'shipment_code' => $shipment->code,
                         'receipt_code' => $receipt->code,
                     ]);

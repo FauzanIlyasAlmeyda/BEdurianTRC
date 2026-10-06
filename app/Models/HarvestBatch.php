@@ -75,6 +75,11 @@ class HarvestBatch extends Model
         return $this->belongsTo(User::class, 'recipient_user_id');
     }
 
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
+
     public function farm(): BelongsTo
     {
         return $this->belongsTo(Farm::class);
@@ -88,5 +93,10 @@ class HarvestBatch extends Model
     public function gradeBreakdowns(): HasMany
     {
         return $this->hasMany(HarvestBatchGradeBreakdown::class);
+    }
+
+    public function distributorSales(): HasMany
+    {
+        return $this->hasMany(DistributorSale::class, 'harvest_batch_id');
     }
 }
