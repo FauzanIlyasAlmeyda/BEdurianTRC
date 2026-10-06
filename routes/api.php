@@ -74,12 +74,8 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::delete('/products/{code}', [UmkmController::class, 'destroyProduct']);
         Route::get('/orders', [UmkmController::class, 'orders']);
         Route::post('/orders', [UmkmController::class, 'storeOrder']);
-<<<<<<< HEAD
-        Route::get('/material-batches', [UmkmController::class, 'materialBatches']);
-=======
         Route::patch('/orders/{code}', [UmkmController::class, 'updateOrder']);
         Route::delete('/orders/{code}', [UmkmController::class, 'destroyOrder']);
->>>>>>> a347f4f27aba77a64b286eaf8b11fe53425b934c
         Route::get('/batches', [UmkmController::class, 'batches']);
         Route::get('/material-batches', [UmkmController::class, 'materialBatches']);
         Route::post('/batches/{code}/receive', [UmkmController::class, 'receiveBatch']);
