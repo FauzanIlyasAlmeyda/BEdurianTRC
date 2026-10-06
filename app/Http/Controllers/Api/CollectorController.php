@@ -178,14 +178,8 @@ class CollectorController extends Controller
                 HarvestBatchStatus::VerifiedByCollector->value,
                 HarvestBatchStatus::InDistribution->value,
             ])
-            ->where(function ($query) use ($user): void {
-                $query->where(function ($legacy): void {
-                    $legacy->whereNull('recipient_user_id')->whereNull('recipient_role');
-                })->orWhere(function ($targeted) use ($user): void {
-                    $targeted->where('recipient_user_id', $user->id)
-                        ->whereIn('recipient_role', ['collector', UserRole::Pengepul->value]);
-                });
-            })
+            ->where('recipient_user_id', $user->id)
+            ->whereIn('recipient_role', ['collector', UserRole::Pengepul->value])
             ->latest()
             ->get();
 
@@ -245,14 +239,8 @@ class CollectorController extends Controller
 
         return ApiResponse::success(HarvestBatch::query()->with('gradeBreakdowns')
             ->whereIn('status', [HarvestBatchStatus::Created->value, HarvestBatchStatus::VerifiedByCollector->value])
-            ->where(function ($query) use ($user): void {
-                $query->where(function ($legacy): void {
-                    $legacy->whereNull('recipient_user_id')->whereNull('recipient_role');
-                })->orWhere(function ($targeted) use ($user): void {
-                    $targeted->where('recipient_user_id', $user->id)
-                        ->whereIn('recipient_role', ['collector', UserRole::Pengepul->value]);
-                });
-            })
+            ->where('recipient_user_id', $user->id)
+            ->whereIn('recipient_role', ['collector', UserRole::Pengepul->value])
             ->latest()->get()->map(fn (HarvestBatch $batch): array => ContractFormatter::batch($batch))->values()->all());
     }
 
@@ -563,11 +551,8 @@ class CollectorController extends Controller
 
     private function isCollectorBatchAccessible(HarvestBatch $batch, User $user): bool
     {
-        if ($batch->recipient_user_id === null && $batch->recipient_role === null) {
-            return true;
-        }
-
-        return (int) $batch->recipient_user_id === $user->id
+        return $batch->recipient_user_id !== null
+            && (int) $batch->recipient_user_id === $user->id
             && in_array($batch->recipient_role, ['collector', UserRole::Pengepul->value], true);
     }
 

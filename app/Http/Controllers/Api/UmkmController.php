@@ -389,6 +389,66 @@ class UmkmController extends Controller
         return ApiResponse::created(ContractFormatter::order($order->load('product')), 'Order berhasil dibuat');
     }
 
+    public function updateOrder(Request $request, string $code): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Umkm->value);
+
+        $data = $request->validate([
+            'status' => ['required', Rule::in(OrderStatus::values())],
+        ]);
+
+        $order = UmkmOrder::query()
+            ->where('code', $code)
+            ->whereHas('product', fn ($query) => $query->where('umkm_user_id', $user->id))
+            ->firstOrFail();
+
+        if ($order->status === OrderStatus::Selesai->value
+            && $data['status'] !== OrderStatus::Selesai->value) {
+            return ApiResponse::error('Pesanan yang sudah selesai tidak dapat dikembalikan ke status diproses.', 422);
+        }
+
+        $order->forceFill(['status' => $data['status']])->save();
+
+        return ApiResponse::success(
+            ContractFormatter::order($order->load('product')),
+            'Status pesanan diperbarui'
+        );
+    }
+
+    public function destroyOrder(Request $request, string $code): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Umkm->value);
+
+        $order = UmkmOrder::query()
+            ->with('product')
+            ->where('code', $code)
+            ->whereHas('product', fn ($query) => $query->where('umkm_user_id', $user->id))
+            ->firstOrFail();
+
+        if ($order->status !== OrderStatus::Diproses->value) {
+            return ApiResponse::error('Hanya pesanan yang masih diproses yang dapat dibatalkan.', 422);
+        }
+
+        DB::transaction(function () use ($order): void {
+            $product = $order->product;
+            if ($product) {
+                $newStock = $product->stock_qty + $order->quantity;
+                $product->forceFill([
+                    'stock_qty' => $newStock,
+                    'status' => $product->status === ProductStatus::Habis->value
+                        ? ProductStatus::Aktif->value
+                        : $product->status,
+                ])->save();
+            }
+
+            $order->delete();
+        });
+
+        return ApiResponse::success(null, 'Pesanan dibatalkan');
+    }
+
     private function ensureRole(?User $user, string $role): void
     {
         abort_unless($user && $user->role === $role, 403, 'Forbidden');

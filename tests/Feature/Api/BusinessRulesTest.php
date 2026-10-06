@@ -122,11 +122,15 @@ class BusinessRulesTest extends TestCase
         $response
             ->assertCreated()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.name', 'Paket Durian Premium');
+            ->assertJsonPath('data.name', 'Paket Durian Premium')
+            ->assertJsonPath('data.sourceMaterials.0.traceCode', $batch->code);
 
         $this->assertDatabaseHas('harvest_batches', [
             'code' => $batch->code,
             'status' => HarvestBatchStatus::Processed->value,
+        ]);
+        $this->assertDatabaseHas('umkm_product_sources', [
+            'source_code_snapshot' => $batch->code,
         ]);
     }
 
