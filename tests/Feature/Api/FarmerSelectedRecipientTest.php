@@ -190,6 +190,63 @@ class FarmerSelectedRecipientTest extends TestCase
         ]);
     }
 
+    public function test_collector_cannot_see_or_verify_legacy_batches_without_a_recipient(): void
+    {
+        $farmer = $this->makeUser(UserRole::Petani->value);
+        $collector = $this->makeUser(UserRole::Pengepul->value);
+        $batch = HarvestBatch::create([
+            'code' => 'DRN-LEGACY-'.fake()->unique()->numerify('######'),
+            'farmer_user_id' => $farmer->id,
+            'farm_name_snapshot' => 'Kebun Lama',
+            'quantity_kg' => 20,
+            'unit' => 'kg',
+            'fruit_count' => 8,
+            'status' => HarvestBatchStatus::Created->value,
+        ]);
+
+        $this->asUser($collector)
+            ->getJson('/api/collector/batches')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+        $this->asUser($collector)
+            ->getJson('/api/collector/stock')
+            ->assertOk()
+            ->assertJsonPath('data.active_batch_count', 0);
+        $this->asUser($collector)
+            ->postJson('/api/collector/batches/'.$batch->code.'/verify', [
+                'received_quantity_kg' => 20,
+                'received_fruit_count' => 8,
+            ])
+            ->assertNotFound();
+    }
+
+    public function test_farmer_can_delete_only_their_unverified_batch(): void
+    {
+        $farmer = $this->makeUser(UserRole::Petani->value);
+        $otherFarmer = $this->makeUser(UserRole::Petani->value);
+        $collector = $this->makeUser(UserRole::Pengepul->value);
+        $pendingBatch = $this->makeBatch($farmer, $collector, UserRole::Pengepul->value);
+        $verifiedBatch = $this->makeBatch($farmer, $collector, UserRole::Pengepul->value);
+        $verifiedBatch->forceFill([
+            'status' => HarvestBatchStatus::VerifiedByCollector->value,
+        ])->save();
+        $otherBatch = $this->makeBatch($otherFarmer, $collector, UserRole::Pengepul->value);
+
+        $this->asUser($farmer)
+            ->deleteJson('/api/farmer/batches/'.$pendingBatch->code)
+            ->assertOk();
+        $this->assertDatabaseMissing('harvest_batches', ['id' => $pendingBatch->id]);
+
+        $this->asUser($farmer)
+            ->deleteJson('/api/farmer/batches/'.$verifiedBatch->code)
+            ->assertUnprocessable();
+        $this->asUser($farmer)
+            ->deleteJson('/api/farmer/batches/'.$otherBatch->code)
+            ->assertNotFound();
+        $this->assertDatabaseHas('harvest_batches', ['id' => $verifiedBatch->id]);
+        $this->assertDatabaseHas('harvest_batches', ['id' => $otherBatch->id]);
+    }
+
     public function test_umkm_and_distributor_can_receive_only_batches_addressed_to_them(): void
     {
         foreach ([

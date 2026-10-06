@@ -70,6 +70,11 @@ class HarvestBatch extends Model
         return $this->belongsTo(User::class, 'farmer_user_id');
     }
 
+    public function recipient(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'recipient_user_id');
+    }
+
     public function farm(): BelongsTo
     {
         return $this->belongsTo(Farm::class);

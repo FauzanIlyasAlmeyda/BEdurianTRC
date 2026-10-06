@@ -101,6 +101,23 @@ class UmkmController extends Controller
             ->all());
     }
 
+    public function materialBatches(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Umkm->value);
+
+        return ApiResponse::success(HarvestBatch::query()
+            ->with('gradeBreakdowns')
+            ->where('recipient_user_id', $user->id)
+            ->where('recipient_role', UserRole::Umkm->value)
+            ->where('status', HarvestBatchStatus::ReceivedByUmkm->value)
+            ->latest()
+            ->get()
+            ->map(fn (HarvestBatch $batch): array => ContractFormatter::batch($batch))
+            ->values()
+            ->all());
+    }
+
     public function receiveBatch(Request $request, string $code): JsonResponse
     {
         $user = $request->user();
@@ -252,7 +269,36 @@ class UmkmController extends Controller
             ->where('umkm_user_id', $user->id)
             ->firstOrFail();
 
-        $product->delete();
+        DB::transaction(function () use ($product, $user): void {
+            $sourceBatches = $product->sources()
+                ->with('batch')
+                ->get()
+                ->pluck('batch')
+                ->filter();
+
+            $product->delete();
+
+            foreach ($sourceBatches as $batch) {
+                $stillUsed = UmkmProductSource::query()
+                    ->where('harvest_batch_id', $batch->id)
+                    ->exists();
+                if ($stillUsed
+                    || $batch->status !== HarvestBatchStatus::Processed->value
+                    || (int) $batch->recipient_user_id !== $user->id
+                    || $batch->recipient_role !== UserRole::Umkm->value) {
+                    continue;
+                }
+
+                $batch->forceFill([
+                    'status' => HarvestBatchStatus::ReceivedByUmkm->value,
+                ])->save();
+
+                Traceability::recordEvent($batch, 'Produk UMKM dihapus; batch bahan baku tersedia kembali', $user, [
+                    'status' => HarvestBatchStatus::ReceivedByUmkm->value,
+                    'product_code' => $product->code,
+                ]);
+            }
+        });
 
         return ApiResponse::success(null, 'Produk berhasil dihapus');
     }

@@ -116,7 +116,7 @@ class FarmerController extends Controller
 
         return ApiResponse::success(
             HarvestBatch::query()
-                ->with(['farm', 'events', 'gradeBreakdowns'])
+                ->with(['farm', 'events', 'gradeBreakdowns', 'recipient'])
                 ->where('farmer_user_id', $user->id)
                 ->latest()
                 ->get()
@@ -261,7 +261,7 @@ class FarmerController extends Controller
         $this->ensureRole($user, UserRole::Petani->value);
 
         $batch = HarvestBatch::query()
-            ->with(['farm', 'events', 'gradeBreakdowns'])
+            ->with(['farm', 'events', 'gradeBreakdowns', 'recipient'])
             ->where('code', $code)
             ->where('farmer_user_id', $user->id)
             ->firstOrFail();
@@ -374,6 +374,28 @@ class FarmerController extends Controller
             'code' => $batch->code,
             'status' => $batch->status,
         ], 'Batch berhasil diperbarui');
+    }
+
+    public function destroyBatch(Request $request, string $code): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Petani->value);
+
+        $batch = HarvestBatch::query()
+            ->where('code', $code)
+            ->where('farmer_user_id', $user->id)
+            ->firstOrFail();
+
+        if ($batch->status !== HarvestBatchStatus::Created->value) {
+            return ApiResponse::error(
+                'Batch hanya dapat dihapus sebelum diverifikasi.',
+                422
+            );
+        }
+
+        $batch->delete();
+
+        return ApiResponse::success(null, 'Batch berhasil dihapus');
     }
 
     private function ensureRole(?User $user, string $role): void

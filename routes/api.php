@@ -31,6 +31,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::post('/batches', [FarmerController::class, 'storeBatch']);
         Route::get('/batches/{code}', [FarmerController::class, 'showBatch']);
         Route::patch('/batches/{code}', [FarmerController::class, 'updateBatch']);
+        Route::delete('/batches/{code}', [FarmerController::class, 'destroyBatch']);
     });
 
     Route::prefix('collector')->group(function (): void {
@@ -76,6 +77,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::patch('/orders/{code}', [UmkmController::class, 'updateOrder']);
         Route::delete('/orders/{code}', [UmkmController::class, 'destroyOrder']);
         Route::get('/batches', [UmkmController::class, 'batches']);
+        Route::get('/material-batches', [UmkmController::class, 'materialBatches']);
         Route::post('/batches/{code}/receive', [UmkmController::class, 'receiveBatch']);
     });
 
