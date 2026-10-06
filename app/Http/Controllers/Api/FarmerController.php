@@ -116,7 +116,7 @@ class FarmerController extends Controller
 
         return ApiResponse::success(
             HarvestBatch::query()
-                ->with(['farm', 'events', 'gradeBreakdowns'])
+                ->with(['farm', 'events', 'gradeBreakdowns', 'recipient'])
                 ->where('farmer_user_id', $user->id)
                 ->latest()
                 ->get()
@@ -261,7 +261,7 @@ class FarmerController extends Controller
         $this->ensureRole($user, UserRole::Petani->value);
 
         $batch = HarvestBatch::query()
-            ->with(['farm', 'events', 'gradeBreakdowns'])
+            ->with(['farm', 'events', 'gradeBreakdowns', 'recipient'])
             ->where('code', $code)
             ->where('farmer_user_id', $user->id)
             ->firstOrFail();

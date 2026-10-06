@@ -93,6 +93,7 @@ class ContractFormatter
             'recipient_role' => $batch->recipient_role === 'pengepul'
                 ? 'collector'
                 : $batch->recipient_role,
+            'recipient_name' => $batch->recipient?->full_name,
             'received_quantity_kg' => $batch->received_quantity_kg === null
                 ? null
                 : (float) $batch->received_quantity_kg,
