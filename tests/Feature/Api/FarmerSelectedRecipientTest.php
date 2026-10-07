@@ -6,6 +6,7 @@ use App\Enums\HarvestBatchStatus;
 use App\Enums\UserRole;
 use App\Models\HarvestBatch;
 use App\Models\User;
+use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -257,6 +258,20 @@ class FarmerSelectedRecipientTest extends TestCase
             $target = $this->makeUser($role);
             $other = $this->makeUser($role);
             $batch = $this->makeBatch($farmer, $target, $role);
+            $receivePayload = [
+                'received_quantity_kg' => 25,
+                'received_fruit_count' => 10,
+            ];
+            if ($role === UserRole::Distributor->value) {
+                $warehouse = Warehouse::create([
+                    'owner_user_id' => $target->id,
+                    'owner_role' => UserRole::Distributor->value,
+                    'name' => 'Gudang Utama',
+                    'location' => 'Jember',
+                    'is_default' => true,
+                ]);
+                $receivePayload['warehouse_id'] = $warehouse->id;
+            }
             $this->assertDatabaseHas('harvest_batches', [
                 'id' => $batch->id,
                 'recipient_user_id' => $target->id,
@@ -276,10 +291,7 @@ class FarmerSelectedRecipientTest extends TestCase
                 ->assertNotFound();
 
             $this->asUser($target)
-                ->postJson($route.'/batches/'.$batch->code.'/receive', [
-                    'received_quantity_kg' => 25,
-                    'received_fruit_count' => 10,
-                ])
+                ->postJson($route.'/batches/'.$batch->code.'/receive', $receivePayload)
                 ->assertOk()
                 ->assertJsonPath('data.status', $receivedStatus);
         }

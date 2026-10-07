@@ -199,6 +199,14 @@ class DistributorController extends Controller
             'quality_note' => ['nullable', 'string'],
             'warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('owner_user_id', $user->id)->where('owner_role', UserRole::Distributor->value)],
         ]);
+        $warehouseId = $data['warehouse_id'] ?? Warehouse::query()
+            ->where('owner_user_id', $user->id)
+            ->where('owner_role', UserRole::Distributor->value)
+            ->where('is_default', true)
+            ->value('id');
+        if ($warehouseId === null) {
+            return ApiResponse::error('Buat atau pilih gudang distributor sebelum menerima batch.', 422);
+        }
 
         $expectedWeight = (float) $shipment->total_weight_kg;
         $expectedFruitCount = (int) $shipment->total_fruit_count;
@@ -211,7 +219,7 @@ class DistributorController extends Controller
             ]);
         }
 
-        $receipt = DB::transaction(function () use ($user, $shipment, $data, $expectedWeight, $expectedFruitCount): DistributorReceipt {
+        $receipt = DB::transaction(function () use ($user, $shipment, $data, $expectedWeight, $expectedFruitCount, $warehouseId): DistributorReceipt {
             $receipt = DistributorReceipt::create([
                 'code' => CodeGenerator::receipt(),
                 'distributor_user_id' => $user->id,
@@ -244,7 +252,7 @@ class DistributorController extends Controller
                         'recipient_role' => UserRole::Distributor->value,
                         'received_quantity_kg' => $source->source_weight_kg,
                         'received_fruit_count' => $source->source_fruit_count,
-                        'warehouse_id' => $data['warehouse_id'] ?? null,
+                        'warehouse_id' => $warehouseId,
                         'verified_by_user_id' => $user->id,
                         'verified_at' => $receipt->received_at,
                     ])->save();
@@ -302,13 +310,23 @@ class DistributorController extends Controller
             'received_quantity_kg' => ['required', 'numeric', 'min:0'],
             'received_fruit_count' => ['required', 'integer', 'min:0'],
             'quality_notes' => ['nullable', 'string'],
+            'warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('owner_user_id', $user->id)->where('owner_role', UserRole::Distributor->value)],
         ]);
+        $warehouseId = $data['warehouse_id'] ?? Warehouse::query()
+            ->where('owner_user_id', $user->id)
+            ->where('owner_role', UserRole::Distributor->value)
+            ->where('is_default', true)
+            ->value('id');
+        if ($warehouseId === null) {
+            return ApiResponse::error('Buat atau pilih gudang distributor sebelum menerima batch.', 422);
+        }
 
-        DB::transaction(function () use ($batch, $data, $user): void {
+        DB::transaction(function () use ($batch, $data, $user, $warehouseId): void {
             $batch->forceFill([
                 'status' => HarvestBatchStatus::ReceivedByDistributor->value,
                 'received_quantity_kg' => $data['received_quantity_kg'],
                 'received_fruit_count' => $data['received_fruit_count'],
+                'warehouse_id' => $warehouseId,
                 'quality_notes' => $data['quality_notes'] ?? null,
                 'verified_by_user_id' => $user->id,
                 'verified_at' => now(),

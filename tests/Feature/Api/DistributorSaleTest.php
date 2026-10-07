@@ -7,6 +7,7 @@ use App\Enums\UserRole;
 use App\Models\DistributorSale;
 use App\Models\HarvestBatch;
 use App\Models\User;
+use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -147,6 +148,56 @@ class DistributorSaleTest extends TestCase
             'recipient_role' => UserRole::Distributor->value,
             'status' => HarvestBatchStatus::ReceivedByDistributor->value,
         ]);
+    }
+
+    public function test_farmer_batch_verification_assigns_owned_warehouse_and_moves_batch_to_inventory(): void
+    {
+        $farmer = $this->makeUser(UserRole::Petani->value);
+        $distributor = $this->makeUser(UserRole::Distributor->value);
+        $warehouse = Warehouse::create([
+            'owner_user_id' => $distributor->id,
+            'owner_role' => UserRole::Distributor->value,
+            'name' => 'Gudang Utama',
+            'location' => 'Jember',
+            'is_default' => true,
+        ]);
+        $batch = HarvestBatch::create([
+            'code' => 'DRN-INCOMING-'.fake()->unique()->numerify('######'),
+            'farmer_user_id' => $farmer->id,
+            'recipient_user_id' => $distributor->id,
+            'recipient_role' => UserRole::Distributor->value,
+            'farm_name_snapshot' => 'Kebun Uji',
+            'variety' => 'Montong',
+            'quantity_kg' => 30,
+            'unit' => 'kg',
+            'fruit_count' => 12,
+            'status' => HarvestBatchStatus::Created->value,
+        ]);
+
+        $this->asUser($distributor)
+            ->postJson('/api/distributor/batches/'.$batch->code.'/receive', [
+                'received_quantity_kg' => 29,
+                'received_fruit_count' => 12,
+                'warehouse_id' => $warehouse->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', HarvestBatchStatus::ReceivedByDistributor->value)
+            ->assertJsonPath('data.batch.warehouse_id', $warehouse->id);
+
+        $this->assertDatabaseHas('harvest_batches', [
+            'id' => $batch->id,
+            'status' => HarvestBatchStatus::ReceivedByDistributor->value,
+            'recipient_user_id' => $distributor->id,
+            'recipient_role' => UserRole::Distributor->value,
+            'warehouse_id' => $warehouse->id,
+        ]);
+
+        $this->asUser($distributor)
+            ->getJson('/api/distributor/inventory-batches')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.code', $batch->code)
+            ->assertJsonPath('data.0.warehouse_id', $warehouse->id);
     }
 
     private function makeUser(string $role): User
