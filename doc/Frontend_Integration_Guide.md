@@ -489,6 +489,8 @@ Content-Type: application/json
 | `PUT` | `/api/consumer/profile` | Ya | Simpan profil konsumen |
 | `GET` | `/api/consumer/products` | Ya | List produk aktif untuk konsumen |
 | `GET` | `/api/consumer/products/{code}` | Ya | Detail produk dan source batch |
+| `GET` | `/api/consumer/products/{code}/validation` | Ya | Status validasi produk oleh konsumen login |
+| `POST` | `/api/consumer/products/{code}/validation` | Ya | Konfirmasi konsumen telah memeriksa produk |
 | `GET` | `/api/consumer/transactions` | Ya | List transaksi |
 | `POST` | `/api/consumer/transactions` | Ya | Buat transaksi |
 

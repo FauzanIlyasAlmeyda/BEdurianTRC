@@ -63,6 +63,7 @@ class CollectorController extends Controller
                     };
                     return [
                         'userId' => (string) $recipient->id,
+                        'accountId' => (string) ($recipient->public_account_id ?? $recipient->id),
                         'name' => filled($name) ? $name : $recipient->full_name,
                         'address' => $profile?->address ?? '',
                         'destinationType' => $recipient->role === UserRole::Pengepul->value ? 'collector' : $recipient->role,

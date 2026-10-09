@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CollectorController;
 use App\Http\Controllers\Api\ConsumerController;
+use App\Http\Controllers\Api\ConsumerProductValidationController;
 use App\Http\Controllers\Api\DistributorController;
 use App\Http\Controllers\Api\DistributorSaleController;
 use App\Http\Controllers\Api\FarmerController;
@@ -97,6 +98,8 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::put('/profile', [ConsumerController::class, 'updateProfile']);
         Route::get('/products', [ConsumerController::class, 'products']);
         Route::get('/products/{code}', [ConsumerController::class, 'showProduct']);
+        Route::get('/products/{code}/validation', [ConsumerProductValidationController::class, 'show']);
+        Route::post('/products/{code}/validation', [ConsumerProductValidationController::class, 'store']);
         Route::get('/transactions', [ConsumerController::class, 'transactions']);
         Route::post('/transactions', [ConsumerController::class, 'storeTransaction']);
     });
