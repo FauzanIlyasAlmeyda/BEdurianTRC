@@ -65,6 +65,26 @@ class FarmerSelectedRecipientTest extends TestCase
             ->assertUnprocessable();
     }
 
+    public function test_collector_shipment_recipients_include_searchable_account_ids(): void
+    {
+        $collector = $this->makeUser(UserRole::Pengepul->value);
+        $recipient = $this->makeUser(UserRole::Distributor->value, [
+            'public_account_id' => '1234567890123456',
+            'first_name' => 'Dina',
+            'last_name' => 'Distributor',
+        ]);
+
+        $this->asUser($collector)
+            ->getJson('/api/collector/shipment-recipients')
+            ->assertOk()
+            ->assertJsonFragment([
+                'userId' => (string) $recipient->id,
+                'accountId' => '1234567890123456',
+                'name' => $recipient->full_name,
+                'destinationType' => 'distributor',
+            ]);
+    }
+
     public function test_farmer_cannot_create_a_batch_for_a_mismatched_recipient_role(): void
     {
         $farmer = $this->makeUser(UserRole::Petani->value);
