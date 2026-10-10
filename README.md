@@ -43,6 +43,52 @@ Saat ini ada dummy blockchain ledger untuk menyiapkan integrasi blockchain sungg
 
 Seeder menyediakan akun contoh untuk tiap role dengan password `password`.
 
+### Deploy Laravel dengan Docker di VPS
+
+Compose menjalankan Laravel dan MariaDB terpisah. Port MariaDB hanya tersedia
+di jaringan internal Docker; Laravel dipublikasikan hanya pada
+`127.0.0.1:8082` agar Nginx host dapat menjadi reverse proxy. File database dan
+foto produk disimpan pada named volume.
+
+1. Salin `.env.docker.example` menjadi `.env.docker`, isi password acak yang
+   berbeda untuk pengguna database dan root, serta isi `APP_URL` dengan URL
+   subdomain yang benar. Generate password alfanumerik dengan
+   `openssl rand -hex 32`, lindungi file dengan `chmod 600 .env.docker`, dan
+   jangan commit `.env.docker`.
+2. Bangun image aplikasi:
+
+   ```sh
+   docker compose --env-file .env.docker build
+   ```
+
+3. Buat APP_KEY menggunakan image hasil build, lalu tempelkan nilainya ke
+   `APP_KEY` di `.env.docker` sebelum menjalankan migrasi atau aplikasi:
+
+   ```sh
+   docker compose --env-file .env.docker run --rm --no-deps app php artisan key:generate --show
+   ```
+
+4. Nyalakan MariaDB dan jalankan migrasi sekali secara eksplisit:
+
+   ```sh
+   docker compose --env-file .env.docker up -d db
+   docker compose --env-file .env.docker run --rm app php artisan migrate --force
+   ```
+
+5. Nyalakan aplikasi dan tes health endpoint lokal:
+
+   ```sh
+   docker compose --env-file .env.docker up -d app
+   curl --fail http://127.0.0.1:8082/up
+   ```
+
+`storage:link` dibuat saat container aplikasi mulai. Migrasi tidak dijalankan
+otomatis saat setiap container restart; jalankan perintah migrasi eksplisit
+setelah deploy perubahan schema. Jangan jalankan `migrate:fresh` atau seeder
+debug pada database production. Nginx host dan service Flask tidak disentuh
+oleh Compose ini; konfigurasi reverse proxy subdomain dilakukan terpisah setelah
+aplikasi sehat.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
