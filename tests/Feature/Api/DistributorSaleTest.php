@@ -24,11 +24,23 @@ class DistributorSaleTest extends TestCase
         $otherBatch = $this->makeBatch($otherDistributor, 'DRN-OTHER-'.fake()->unique()->numerify('######'));
 
         $this->asUser($seller)
-            ->getJson('/api/distributor/sale-recipients')
+            ->getJson('/api/distributor/sale-recipients?role=umkm&search='.$buyer->first_name)
             ->assertOk()
             ->assertJsonFragment([
                 'id' => $buyer->id,
                 'role' => UserRole::Umkm->value,
+            ]);
+
+        $this->asUser($seller)
+            ->getJson('/api/distributor/sale-recipients?role=petani&search=any')
+            ->assertUnprocessable();
+
+        $this->asUser($seller)
+            ->getJson('/api/distributor/sale-recipients?role=distributor&search='.$otherDistributor->first_name)
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $otherDistributor->id,
+                'role' => UserRole::Distributor->value,
             ]);
 
         $this->asUser($seller)

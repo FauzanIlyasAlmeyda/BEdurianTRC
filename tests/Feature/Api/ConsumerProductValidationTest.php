@@ -7,6 +7,8 @@ use App\Models\UmkmProduct;
 use App\Models\UmkmProductSource;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ConsumerProductValidationTest extends TestCase
@@ -86,6 +88,41 @@ class ConsumerProductValidationTest extends TestCase
             'data.product.sourceMaterials.0.traceCode',
             $sourceCode,
         );
+    }
+
+    public function test_umkm_product_photo_is_saved_and_exposed_to_consumers(): void
+    {
+        Storage::fake('public');
+        $umkm = User::factory()->create(['role' => UserRole::Umkm->value]);
+        $consumer = User::factory()->create(['role' => UserRole::Konsumen->value]);
+
+        $response = $this->asUser($umkm)->post('/api/umkm/products', [
+            'name' => 'Durian Olahan',
+            'source_codes' => [],
+            'photo' => UploadedFile::fake()->createWithContent(
+                'produk.png',
+                base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l8kAAAAASUVORK5CYII='),
+            ),
+        ]);
+        $response->assertCreated()
+            ->assertJsonPath('data.photo_url', fn ($url) => str_starts_with($url, '/storage/'));
+
+        $path = $response->json('data.photo_path');
+        Storage::disk('public')->assertExists($path);
+        $this->assertDatabaseHas('umkm_products', [
+            'umkm_user_id' => $umkm->id,
+            'photo_path' => $path,
+        ]);
+
+        $this->asUser($consumer)
+            ->getJson('/api/consumer/products')
+            ->assertOk()
+            ->assertJsonPath('data.0.image_url', '/storage/'.$path);
+
+        $this->asUser($consumer)
+            ->getJson('/api/consumer/products/'.$response->json('data.code'))
+            ->assertOk()
+            ->assertJsonPath('data.product.image_url', '/storage/'.$path);
     }
 
     private function makeProduct(): UmkmProduct

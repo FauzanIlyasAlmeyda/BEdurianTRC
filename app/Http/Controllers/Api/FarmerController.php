@@ -131,6 +131,7 @@ class FarmerController extends Controller
         $user = $request->user();
         $this->ensureRole($user, UserRole::Petani->value);
 
+        $request->merge(['search' => trim((string) $request->input('search'))]);
         $data = $request->validate([
             'role' => ['required', Rule::in([
                 'collector',
@@ -138,18 +139,30 @@ class FarmerController extends Controller
                 UserRole::Umkm->value,
                 UserRole::Distributor->value,
             ])],
+            'search' => ['required', 'string', 'min:1', 'max:100'],
         ]);
 
         $lookupRole = $data['role'] === 'collector'
             ? UserRole::Pengepul->value
             : $data['role'];
+        $search = trim($data['search']);
 
         $recipients = User::query()
             ->select(['id', 'public_account_id', 'first_name', 'last_name', 'role'])
             ->where('role', $lookupRole)
             ->where('is_active', true)
+            ->whereKeyNot($user->id)
+            ->where(function ($query) use ($search): void {
+                $query->where('public_account_id', 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%");
+                if (ctype_digit($search)) {
+                    $query->orWhere('id', (int) $search);
+                }
+            })
             ->orderBy('first_name')
             ->orderBy('last_name')
+            ->limit(50)
             ->get()
             ->map(fn (User $recipient): array => [
                 'id' => $recipient->id,
@@ -196,8 +209,8 @@ class FarmerController extends Controller
             'storage_suggestion' => ['nullable', 'string', 'max:191'],
             'notes' => ['nullable', 'string'],
             'photo_path' => ['nullable', 'string', 'max:255'],
+            'photo' => ['nullable', 'image', 'max:10240'],
         ]);
-
         $recipientRole = $data['recipient_role'] === 'collector'
             ? UserRole::Pengepul->value
             : $data['recipient_role'];
@@ -213,6 +226,10 @@ class FarmerController extends Controller
                 'recipient_user_id' => ['Penerima harus akun aktif dengan role yang dipilih.'],
             ]);
         }
+        if ($request->hasFile('photo')) {
+            $data['photo_path'] = $request->file('photo')->store('batch-photos', 'public');
+        }
+        unset($data['photo']);
 
         $data['recipient_role'] = $data['recipient_role'] === UserRole::Pengepul->value
             ? 'collector'
@@ -245,6 +262,7 @@ class FarmerController extends Controller
             [
                 'code' => $batch->code,
                 'status' => $batch->status,
+                'batch' => ContractFormatter::batch($batch),
                 'recipient_user_id' => $batch->recipient_user_id,
                 'recipient_role' => $batch->recipient_role === UserRole::Pengepul->value
                     ? 'collector'
@@ -355,12 +373,16 @@ class FarmerController extends Controller
             'storage_suggestion' => ['nullable', 'string', 'max:191'],
             'notes' => ['nullable', 'string'],
             'photo_path' => ['nullable', 'string', 'max:255'],
+            'photo' => ['nullable', 'image', 'max:10240'],
         ]);
-
         if (isset($data['farm_id'])) {
             $farm = Farm::query()->whereKey($data['farm_id'])->where('farmer_user_id', $user->id)->firstOrFail();
             $data['farm_name_snapshot'] = $data['farm_name_snapshot'] ?? $farm->name;
         }
+        if ($request->hasFile('photo')) {
+            $data['photo_path'] = $request->file('photo')->store('batch-photos', 'public');
+        }
+        unset($data['photo']);
 
         $batch->fill($data);
         $batch->farm_name_snapshot = $data['farm_name_snapshot'] ?? $batch->farm_name_snapshot;
@@ -373,6 +395,7 @@ class FarmerController extends Controller
         return ApiResponse::success([
             'code' => $batch->code,
             'status' => $batch->status,
+            'batch' => ContractFormatter::batch($batch->fresh(['farm', 'events', 'gradeBreakdowns'])),
         ], 'Batch berhasil diperbarui');
     }
 

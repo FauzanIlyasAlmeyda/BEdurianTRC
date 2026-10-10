@@ -177,11 +177,11 @@ class UmkmController extends Controller
             'status' => ['nullable', Rule::in(ProductStatus::values())],
             'photo_path' => ['nullable', 'string', 'max:255'],
             'image_path' => ['nullable', 'string', 'max:255'],
+            'photo' => ['nullable', 'image', 'max:10240'],
             'qr_code_data' => ['nullable', 'string', 'max:150'],
             'source_codes' => ['nullable', 'array'],
             'source_codes.*' => ['string', 'exists:harvest_batches,code'],
         ]);
-
         $sourceBatches = HarvestBatch::query()
             ->with('farmer')
             ->whereIn('code', $data['source_codes'] ?? [])
@@ -204,6 +204,10 @@ class UmkmController extends Controller
                 ]);
             }
         }
+        if ($request->hasFile('photo')) {
+            $data['photo_path'] = $request->file('photo')->store('product-photos', 'public');
+        }
+        unset($data['photo']);
 
         $product = DB::transaction(function () use ($user, $data) {
             $price = $this->resolvePrice($data);

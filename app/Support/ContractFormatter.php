@@ -88,6 +88,9 @@ class ContractFormatter
             'fruitCount' => $batch->fruit_count,
             'harvest_date' => $batch->harvest_date?->toDateString(),
             'harvestDate' => $batch->harvest_date?->toDateString(),
+            'photo_path' => $batch->photo_path,
+            'photo_url' => self::imageUrl($batch->photo_path),
+            'photoUrl' => self::imageUrl($batch->photo_path),
             'status' => $batch->status,
             'recipient_user_id' => $batch->recipient_user_id,
             'recipient_role' => $batch->recipient_role === 'pengepul'
@@ -230,6 +233,12 @@ class ContractFormatter
             'short_description' => $product->description ? str($product->description)->limit(80)->toString() : null,
             'shortDescription' => $product->description ? str($product->description)->limit(80)->toString() : null,
             'description' => $product->description,
+            'photo_path' => $product->photo_path,
+            'image_path' => $product->photo_path,
+            'photo_url' => self::imageUrl($product->photo_path),
+            'image_url' => self::imageUrl($product->photo_path),
+            'photoUrl' => self::imageUrl($product->photo_path),
+            'imageUrl' => self::imageUrl($product->photo_path),
             'qr_code_data' => $product->code,
             'qrCodeData' => $product->code,
             'sourceMaterials' => $sourceMaterials,
@@ -349,6 +358,24 @@ class ContractFormatter
         $amount = (float) $value;
 
         return 'Rp ' . number_format($amount, 0, ',', '.');
+    }
+
+    public static function imageUrl(?string $path): ?string
+    {
+        if ($path === null || trim($path) === '') {
+            return null;
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://', 'blob:', 'assets/'])) {
+            return $path;
+        }
+
+        $normalizedPath = ltrim($path, '/');
+        if (Str::startsWith($normalizedPath, 'storage/')) {
+            $normalizedPath = Str::after($normalizedPath, 'storage/');
+        }
+
+        return \Illuminate\Support\Facades\Storage::disk('public')->url($normalizedPath);
     }
 
     private static function eventStatus(HarvestBatchEvent $event): string

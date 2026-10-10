@@ -232,6 +232,10 @@ class ConsumerController extends Controller
             'location' => $profile?->address,
             'rating' => 4.9,
             'stock_label' => 'Stok ' . (int) $product->stock_qty . ' paket',
+            'photo_path' => $product->photo_path,
+            'image_path' => $product->photo_path,
+            'photo_url' => ContractFormatter::imageUrl($product->photo_path),
+            'image_url' => ContractFormatter::imageUrl($product->photo_path),
         ];
     }
 

@@ -8,6 +8,8 @@ use App\Models\HarvestBatch;
 use App\Models\User;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class FarmerSelectedRecipientTest extends TestCase
@@ -47,7 +49,7 @@ class FarmerSelectedRecipientTest extends TestCase
         $this->makeUser(UserRole::Pengepul->value, ['is_active' => false]);
 
         $response = $this->asUser($farmer)
-            ->getJson('/api/farmer/recipients?role=collector');
+            ->getJson('/api/farmer/recipients?role=collector&search=Ayu');
 
         $response->assertOk()->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $collector->id)
@@ -61,7 +63,7 @@ class FarmerSelectedRecipientTest extends TestCase
             ]]]);
 
         $this->asUser($farmer)
-            ->getJson('/api/farmer/recipients?role=konsumen')
+            ->getJson('/api/farmer/recipients?role=konsumen&search=123')
             ->assertUnprocessable();
     }
 
@@ -75,7 +77,7 @@ class FarmerSelectedRecipientTest extends TestCase
         ]);
 
         $this->asUser($collector)
-            ->getJson('/api/collector/shipment-recipients')
+            ->getJson('/api/collector/shipment-recipients?role=distributor&search=1234567890123456')
             ->assertOk()
             ->assertJsonFragment([
                 'userId' => (string) $recipient->id,
@@ -83,6 +85,57 @@ class FarmerSelectedRecipientTest extends TestCase
                 'name' => $recipient->full_name,
                 'destinationType' => 'distributor',
             ]);
+    }
+
+    public function test_collector_can_search_another_collector_but_never_a_farmer(): void
+    {
+        $collector = $this->makeUser(UserRole::Pengepul->value, [
+            'first_name' => 'Pengepul',
+            'last_name' => 'Satu',
+        ]);
+        $otherCollector = $this->makeUser(UserRole::Pengepul->value, [
+            'first_name' => 'Pengepul',
+            'last_name' => 'Dua',
+        ]);
+
+        $this->asUser($collector)
+            ->getJson('/api/collector/shipment-recipients?role=collector&search=Dua')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.userId', (string) $otherCollector->id)
+            ->assertJsonPath('data.0.destinationType', 'collector');
+
+        $this->asUser($collector)
+            ->getJson('/api/collector/shipment-recipients?role=petani&search=Fauzan')
+            ->assertUnprocessable();
+    }
+
+    public function test_recipient_search_only_returns_active_accounts_of_the_selected_role(): void
+    {
+        $farmer = $this->makeUser(UserRole::Petani->value);
+        $collector = $this->makeUser(UserRole::Pengepul->value, [
+            'public_account_id' => '1234567890123456',
+            'first_name' => 'Dina',
+        ]);
+        $this->makeUser(UserRole::Distributor->value, [
+            'public_account_id' => '1234567890123457',
+            'first_name' => 'Dina',
+        ]);
+        $this->makeUser(UserRole::Pengepul->value, [
+            'public_account_id' => '1234567890999999',
+            'first_name' => 'Dina',
+            'is_active' => false,
+        ]);
+
+        $this->asUser($farmer)
+            ->getJson('/api/farmer/recipients?role=collector&search=1234567890123456')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $collector->id);
+
+        $this->asUser($farmer)
+            ->getJson('/api/farmer/recipients?role=petani&search=Dina')
+            ->assertUnprocessable();
     }
 
     public function test_farmer_cannot_create_a_batch_for_a_mismatched_recipient_role(): void
@@ -155,6 +208,33 @@ class FarmerSelectedRecipientTest extends TestCase
         $this->asUser($farmer)->getJson('/api/farmer/batches')
             ->assertOk()
             ->assertJsonCount(1, 'data');
+    }
+
+    public function test_farmer_batch_photo_is_stored_and_returned_as_public_url(): void
+    {
+        Storage::fake('public');
+        $farmer = $this->makeUser(UserRole::Petani->value);
+        $recipient = $this->makeUser(UserRole::Pengepul->value);
+
+        $response = $this->asUser($farmer)->post('/api/farmer/batches', [
+            'recipient_user_id' => $recipient->id,
+            'recipient_role' => 'collector',
+            'quantity_kg' => 25,
+            'photo' => UploadedFile::fake()->createWithContent(
+                'durian.png',
+                base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l8kAAAAASUVORK5CYII='),
+            ),
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.batch.photo_path', fn ($path) => is_string($path))
+            ->assertJsonPath('data.batch.photo_url', fn ($url) => str_starts_with($url, '/storage/'));
+        $path = $response->json('data.batch.photo_path');
+        Storage::disk('public')->assertExists($path);
+        $this->assertDatabaseHas('harvest_batches', [
+            'farmer_user_id' => $farmer->id,
+            'photo_path' => $path,
+        ]);
     }
 
     public function test_only_the_selected_collector_can_list_and_verify_a_targeted_batch(): void

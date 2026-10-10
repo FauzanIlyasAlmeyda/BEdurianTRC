@@ -55,13 +55,47 @@ class DistributorSaleController extends Controller
         $user = $request->user();
         $this->ensureRole($user, UserRole::Distributor->value);
 
+        $request->merge(['search' => trim((string) $request->input('search'))]);
+        $data = $request->validate([
+            'role' => ['required', Rule::in([
+                'collector',
+                UserRole::Pengepul->value,
+                UserRole::Distributor->value,
+                UserRole::Umkm->value,
+            ])],
+            'search' => ['required', 'string', 'min:1', 'max:100'],
+        ]);
+        $lookupRole = $data['role'] === 'collector'
+            ? UserRole::Pengepul->value
+            : $data['role'];
+        $search = $data['search'];
+        $profileRelation = match ($lookupRole) {
+            UserRole::Pengepul->value => 'collectorProfile',
+            UserRole::Distributor->value => 'distributorProfile',
+            UserRole::Umkm->value => 'umkmProfile',
+        };
+        $profileNameColumn = $lookupRole === UserRole::Umkm->value
+            ? 'name'
+            : 'business_name';
+
         $recipients = User::query()
             ->where('is_active', true)
             ->whereKeyNot($user->id)
-            ->whereIn('role', self::RECIPIENT_ROLES)
+            ->where('role', $lookupRole)
+            ->where(function ($query) use ($search, $profileRelation, $profileNameColumn): void {
+                $query->where('public_account_id', 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhereHas($profileRelation, fn ($profileQuery) => $profileQuery
+                        ->where($profileNameColumn, 'like', "%{$search}%"));
+                if (ctype_digit($search)) {
+                    $query->orWhere('id', (int) $search);
+                }
+            })
             ->with(['collectorProfile', 'distributorProfile', 'umkmProfile'])
             ->orderBy('first_name')
             ->orderBy('last_name')
+            ->limit(50)
             ->get()
             ->map(function (User $recipient): array {
                 $profile = match ($recipient->role) {
