@@ -46,6 +46,10 @@ class ContractFormatter
             'district' => $farm->district,
             'village' => $farm->village,
             'address' => $farm->address,
+            'photo_path' => $farm->photo_path,
+            'photoPath' => $farm->photo_path,
+            'photo_url' => self::publicFileUrl($farm->photo_path),
+            'photoUrl' => self::publicFileUrl($farm->photo_path),
             'latitude' => $farm->latitude === null ? null : (float) $farm->latitude,
             'longitude' => $farm->longitude === null ? null : (float) $farm->longitude,
         ];
