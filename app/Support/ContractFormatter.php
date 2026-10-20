@@ -89,8 +89,9 @@ class ContractFormatter
             'harvest_date' => $batch->harvest_date?->toDateString(),
             'harvestDate' => $batch->harvest_date?->toDateString(),
             'photo_path' => $batch->photo_path,
-            'photo_url' => self::imageUrl($batch->photo_path),
-            'photoUrl' => self::imageUrl($batch->photo_path),
+            'photoPath' => $batch->photo_path,
+            'photo_url' => self::publicFileUrl($batch->photo_path),
+            'photoUrl' => self::publicFileUrl($batch->photo_path),
             'status' => $batch->status,
             'recipient_user_id' => $batch->recipient_user_id,
             'recipient_role' => $batch->recipient_role === 'pengepul'
@@ -121,6 +122,31 @@ class ContractFormatter
             'gradeBreakdown' => $gradeBreakdowns,
             'blockchain' => $blockchain,
         ];
+    }
+
+    private static function publicFileUrl(?string $path): ?string
+    {
+        if (! filled($path)) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        if (str_starts_with($path, '/storage/')) {
+            return $path;
+        }
+
+        if (str_starts_with($path, 'storage/')) {
+            return '/' . $path;
+        }
+
+        if (str_starts_with($path, 'uploads/')) {
+            return '/storage/' . $path;
+        }
+
+        return $path;
     }
 
     public static function batchEvent(HarvestBatchEvent $event): array
@@ -234,11 +260,11 @@ class ContractFormatter
             'shortDescription' => $product->description ? str($product->description)->limit(80)->toString() : null,
             'description' => $product->description,
             'photo_path' => $product->photo_path,
-            'image_path' => $product->photo_path,
-            'photo_url' => self::imageUrl($product->photo_path),
-            'image_url' => self::imageUrl($product->photo_path),
-            'photoUrl' => self::imageUrl($product->photo_path),
-            'imageUrl' => self::imageUrl($product->photo_path),
+            'photoPath' => $product->photo_path,
+            'image_path' => self::publicFileUrl($product->photo_path),
+            'imagePath' => self::publicFileUrl($product->photo_path),
+            'photo_url' => self::publicFileUrl($product->photo_path),
+            'photoUrl' => self::publicFileUrl($product->photo_path),
             'qr_code_data' => $product->code,
             'qrCodeData' => $product->code,
             'sourceMaterials' => $sourceMaterials,

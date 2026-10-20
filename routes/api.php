@@ -78,10 +78,6 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('/products', [UmkmController::class, 'products']);
         Route::post('/products', [UmkmController::class, 'storeProduct']);
         Route::delete('/products/{code}', [UmkmController::class, 'destroyProduct']);
-        Route::get('/orders', [UmkmController::class, 'orders']);
-        Route::post('/orders', [UmkmController::class, 'storeOrder']);
-        Route::patch('/orders/{code}', [UmkmController::class, 'updateOrder']);
-        Route::delete('/orders/{code}', [UmkmController::class, 'destroyOrder']);
         Route::get('/batches', [UmkmController::class, 'batches']);
         Route::get('/material-batches', [UmkmController::class, 'materialBatches']);
         Route::post('/batches/{code}/receive', [UmkmController::class, 'receiveBatch']);
@@ -98,10 +94,6 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::put('/profile', [ConsumerController::class, 'updateProfile']);
         Route::get('/products', [ConsumerController::class, 'products']);
         Route::get('/products/{code}', [ConsumerController::class, 'showProduct']);
-        Route::get('/products/{code}/validation', [ConsumerProductValidationController::class, 'show']);
-        Route::post('/products/{code}/validation', [ConsumerProductValidationController::class, 'store']);
-        Route::get('/transactions', [ConsumerController::class, 'transactions']);
-        Route::post('/transactions', [ConsumerController::class, 'storeTransaction']);
     });
 
 });

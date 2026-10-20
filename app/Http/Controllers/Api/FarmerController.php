@@ -209,8 +209,14 @@ class FarmerController extends Controller
             'storage_suggestion' => ['nullable', 'string', 'max:191'],
             'notes' => ['nullable', 'string'],
             'photo_path' => ['nullable', 'string', 'max:255'],
-            'photo' => ['nullable', 'image', 'max:10240'],
+            'photo' => ['nullable', 'image', 'max:4096'],
         ]);
+
+        if ($request->hasFile('photo')) {
+            $data['photo_path'] = $this->storeBatchPhoto($request);
+        }
+        unset($data['photo']);
+
         $recipientRole = $data['recipient_role'] === 'collector'
             ? UserRole::Pengepul->value
             : $data['recipient_role'];
@@ -258,19 +264,20 @@ class FarmerController extends Controller
             return $batch->load(['farm', 'events', 'gradeBreakdowns']);
         });
 
-        return ApiResponse::created(
-            [
-                'code' => $batch->code,
-                'status' => $batch->status,
-                'batch' => ContractFormatter::batch($batch),
-                'recipient_user_id' => $batch->recipient_user_id,
-                'recipient_role' => $batch->recipient_role === UserRole::Pengepul->value
-                    ? 'collector'
-                    : $batch->recipient_role,
-                'harvest_date' => $batch->harvest_date?->toDateString(),
-            ],
-            'Batch berhasil dibuat'
+        $formattedBatch = ContractFormatter::batch(
+            $batch->fresh(['farm', 'events', 'gradeBreakdowns', 'recipient'])
         );
+
+        return ApiResponse::created([
+            'batch' => $formattedBatch,
+            'code' => $batch->code,
+            'status' => $batch->status,
+            'recipient_user_id' => $batch->recipient_user_id,
+            'recipient_role' => $batch->recipient_role === UserRole::Pengepul->value
+                ? 'collector'
+                : $batch->recipient_role,
+            'harvest_date' => $batch->harvest_date?->toDateString(),
+        ], 'Batch berhasil dibuat');
     }
 
     public function showBatch(Request $request, string $code): JsonResponse
@@ -373,8 +380,14 @@ class FarmerController extends Controller
             'storage_suggestion' => ['nullable', 'string', 'max:191'],
             'notes' => ['nullable', 'string'],
             'photo_path' => ['nullable', 'string', 'max:255'],
-            'photo' => ['nullable', 'image', 'max:10240'],
+            'photo' => ['nullable', 'image', 'max:4096'],
         ]);
+
+        if ($request->hasFile('photo')) {
+            $data['photo_path'] = $this->storeBatchPhoto($request);
+        }
+        unset($data['photo']);
+
         if (isset($data['farm_id'])) {
             $farm = Farm::query()->whereKey($data['farm_id'])->where('farmer_user_id', $user->id)->firstOrFail();
             $data['farm_name_snapshot'] = $data['farm_name_snapshot'] ?? $farm->name;
@@ -392,7 +405,12 @@ class FarmerController extends Controller
             'status' => $batch->status,
         ]);
 
+        $formattedBatch = ContractFormatter::batch(
+            $batch->fresh(['farm', 'events', 'gradeBreakdowns', 'recipient'])
+        );
+
         return ApiResponse::success([
+            'batch' => $formattedBatch,
             'code' => $batch->code,
             'status' => $batch->status,
             'batch' => ContractFormatter::batch($batch->fresh(['farm', 'events', 'gradeBreakdowns'])),
@@ -424,5 +442,12 @@ class FarmerController extends Controller
     private function ensureRole(?User $user, string $role): void
     {
         abort_unless($user && $user->role === $role, 403, 'Forbidden');
+    }
+
+    private function storeBatchPhoto(Request $request): string
+    {
+        $path = $request->file('photo')->store('uploads/batches', 'public');
+
+        return '/storage/' . $path;
     }
 }

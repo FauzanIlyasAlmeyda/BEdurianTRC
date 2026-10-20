@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\OrderStatus;
 use App\Enums\HarvestBatchStatus;
 use App\Enums\ProductStatus;
 use App\Enums\UserRole;
@@ -11,7 +10,6 @@ use App\Support\ApiResponse;
 use App\Support\ContractFormatter;
 use App\Models\UmkmProfile;
 use App\Models\HarvestBatch;
-use App\Models\UmkmOrder;
 use App\Models\UmkmProduct;
 use App\Models\UmkmProductSource;
 use App\Models\User;
@@ -56,7 +54,13 @@ class UmkmController extends Controller
             'province' => ['required', 'string', 'max:100'],
             'contact' => ['nullable', 'string', 'max:50'],
             'image_path' => ['nullable', 'string', 'max:255'],
+            'image' => ['nullable', 'image', 'max:4096'],
         ]);
+
+        if ($request->hasFile('image')) {
+            $data['image_path'] = $this->storePublicImage($request, 'image', 'uploads/profiles/umkm');
+        }
+        unset($data['image']);
 
         $profile = UmkmProfile::updateOrCreate([
             'user_id' => $user->id,
@@ -177,11 +181,20 @@ class UmkmController extends Controller
             'status' => ['nullable', Rule::in(ProductStatus::values())],
             'photo_path' => ['nullable', 'string', 'max:255'],
             'image_path' => ['nullable', 'string', 'max:255'],
-            'photo' => ['nullable', 'image', 'max:10240'],
+            'photo' => ['nullable', 'image', 'max:4096'],
+            'image' => ['nullable', 'image', 'max:4096'],
             'qr_code_data' => ['nullable', 'string', 'max:150'],
             'source_codes' => ['nullable', 'array'],
             'source_codes.*' => ['string', 'exists:harvest_batches,code'],
         ]);
+
+        if ($request->hasFile('photo')) {
+            $data['photo_path'] = $this->storePublicImage($request, 'photo', 'uploads/products');
+        } elseif ($request->hasFile('image')) {
+            $data['photo_path'] = $this->storePublicImage($request, 'image', 'uploads/products');
+        }
+        unset($data['photo'], $data['image']);
+
         $sourceBatches = HarvestBatch::query()
             ->with('farmer')
             ->whereIn('code', $data['source_codes'] ?? [])
@@ -307,155 +320,16 @@ class UmkmController extends Controller
         return ApiResponse::success(null, 'Produk berhasil dihapus');
     }
 
-    public function orders(Request $request): JsonResponse
-    {
-        $this->ensureRole($request->user(), UserRole::Umkm->value);
-
-        return ApiResponse::success(
-            UmkmOrder::query()
-                ->with('product')
-                ->whereHas('product', fn ($query) => $query->where('umkm_user_id', $request->user()->id))
-                ->latest()
-                ->get()
-                ->map(fn (UmkmOrder $order): array => ContractFormatter::order($order))
-                ->values()
-                ->all()
-        );
-    }
-
-    public function storeOrder(Request $request): JsonResponse
-    {
-        $user = $request->user();
-        $this->ensureRole($user, UserRole::Umkm->value);
-
-        $data = $request->validate([
-            'umkm_product_id' => ['nullable', 'integer', 'exists:umkm_products,id'],
-            'product_id' => ['nullable', 'integer', 'exists:umkm_products,id'],
-            'buyer_name' => ['required', 'string', 'max:150'],
-            'buyer_phone' => ['nullable', 'string', 'max:50'],
-            'buyer_address' => ['required', 'string'],
-            'quantity' => ['required', 'integer', 'min:1'],
-            'total_amount' => ['nullable', 'numeric', 'min:0'],
-            'total_label' => ['nullable', 'string', 'max:50'],
-            'qr_code_data' => ['nullable', 'string'],
-            'status' => ['nullable', Rule::in(OrderStatus::values())],
-            'note' => ['nullable', 'string'],
-        ]);
-
-        $productId = $data['umkm_product_id'] ?? $data['product_id'] ?? null;
-        if (! $productId) {
-            return ApiResponse::validation([
-                'product_id' => ['Produk wajib dipilih.'],
-            ]);
-        }
-
-        $product = UmkmProduct::query()
-            ->where('umkm_user_id', $user->id)
-            ->whereKey($productId)
-            ->firstOrFail();
-
-        if ($product->status !== ProductStatus::Aktif->value) {
-            return ApiResponse::validation([
-                'product_id' => ['Produk harus berstatus aktif untuk dibuatkan order.'],
-            ]);
-        }
-
-        if (($product->stock_qty ?? 0) < ($data['quantity'] ?? 0)) {
-            return ApiResponse::validation([
-                'quantity' => ['Stok produk tidak mencukupi.'],
-            ]);
-        }
-
-        $totalAmount = $data['total_amount'] ?? $this->resolveMoney($data['total_label'] ?? null);
-
-        $order = UmkmOrder::create([
-            'code' => CodeGenerator::order(),
-            'umkm_product_id' => $product->id,
-            'buyer_name' => $data['buyer_name'],
-            'buyer_phone' => $data['buyer_phone'] ?? null,
-            'buyer_address' => $data['buyer_address'],
-            'quantity' => $data['quantity'],
-            'total_amount' => $totalAmount,
-            'qr_code_data' => $data['qr_code_data'] ?? null,
-            'note' => $data['note'] ?? null,
-            'status' => $data['status'] ?? OrderStatus::Diproses->value,
-        ]);
-
-        $order->forceFill([
-            'code' => CodeGenerator::order($order->id),
-        ])->save();
-
-        $product->forceFill([
-            'stock_qty' => $product->stock_qty - $data['quantity'],
-            'status' => $product->stock_qty - $data['quantity'] <= 0 ? ProductStatus::Habis->value : $product->status,
-        ])->save();
-
-        return ApiResponse::created(ContractFormatter::order($order->load('product')), 'Order berhasil dibuat');
-    }
-
-    public function updateOrder(Request $request, string $code): JsonResponse
-    {
-        $user = $request->user();
-        $this->ensureRole($user, UserRole::Umkm->value);
-
-        $data = $request->validate([
-            'status' => ['required', Rule::in(OrderStatus::values())],
-        ]);
-
-        $order = UmkmOrder::query()
-            ->where('code', $code)
-            ->whereHas('product', fn ($query) => $query->where('umkm_user_id', $user->id))
-            ->firstOrFail();
-
-        if ($order->status === OrderStatus::Selesai->value
-            && $data['status'] !== OrderStatus::Selesai->value) {
-            return ApiResponse::error('Pesanan yang sudah selesai tidak dapat dikembalikan ke status diproses.', 422);
-        }
-
-        $order->forceFill(['status' => $data['status']])->save();
-
-        return ApiResponse::success(
-            ContractFormatter::order($order->load('product')),
-            'Status pesanan diperbarui'
-        );
-    }
-
-    public function destroyOrder(Request $request, string $code): JsonResponse
-    {
-        $user = $request->user();
-        $this->ensureRole($user, UserRole::Umkm->value);
-
-        $order = UmkmOrder::query()
-            ->with('product')
-            ->where('code', $code)
-            ->whereHas('product', fn ($query) => $query->where('umkm_user_id', $user->id))
-            ->firstOrFail();
-
-        if ($order->status !== OrderStatus::Diproses->value) {
-            return ApiResponse::error('Hanya pesanan yang masih diproses yang dapat dibatalkan.', 422);
-        }
-
-        DB::transaction(function () use ($order): void {
-            $product = $order->product;
-            if ($product) {
-                $newStock = $product->stock_qty + $order->quantity;
-                $product->forceFill([
-                    'stock_qty' => $newStock,
-                    'status' => $product->status === ProductStatus::Habis->value
-                        ? ProductStatus::Aktif->value
-                        : $product->status,
-                ])->save();
-            }
-
-            $order->delete();
-        });
-
-        return ApiResponse::success(null, 'Pesanan dibatalkan');
-    }
-
     private function ensureRole(?User $user, string $role): void
     {
         abort_unless($user && $user->role === $role, 403, 'Forbidden');
+    }
+
+    private function storePublicImage(Request $request, string $field, string $directory): string
+    {
+        $path = $request->file($field)->store($directory, 'public');
+
+        return '/storage/' . $path;
     }
 
     private function resolvePrice(array $data): float

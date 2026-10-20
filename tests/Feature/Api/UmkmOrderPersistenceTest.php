@@ -2,12 +2,10 @@
 
 namespace Tests\Feature\Api;
 
-use App\Enums\OrderStatus;
 use App\Enums\HarvestBatchStatus;
 use App\Enums\ProductStatus;
 use App\Enums\UserRole;
 use App\Models\HarvestBatch;
-use App\Models\UmkmOrder;
 use App\Models\UmkmProduct;
 use App\Models\UmkmProductSource;
 use App\Models\User;
@@ -18,43 +16,9 @@ class UmkmOrderPersistenceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_umkm_can_persist_order_completion(): void
+    public function test_umkm_can_delete_owned_product(): void
     {
-        [$umkm, $product, $order] = $this->createUmkmOrder();
-
-        $this->withToken($umkm->createToken('testing')->plainTextToken)
-            ->patchJson('/api/umkm/orders/'.$order->code, [
-                'status' => OrderStatus::Selesai->value,
-            ])
-            ->assertOk()
-            ->assertJsonPath('data.status', OrderStatus::Selesai->value);
-
-        $this->assertDatabaseHas('umkm_orders', [
-            'id' => $order->id,
-            'status' => OrderStatus::Selesai->value,
-        ]);
-    }
-
-    public function test_umkm_can_cancel_order_and_restore_product_stock(): void
-    {
-        [$umkm, $product, $order] = $this->createUmkmOrder();
-
-        $this->withToken($umkm->createToken('testing')->plainTextToken)
-            ->deleteJson('/api/umkm/orders/'.$order->code)
-            ->assertOk()
-            ->assertJsonPath('success', true);
-
-        $this->assertDatabaseMissing('umkm_orders', ['id' => $order->id]);
-        $this->assertDatabaseHas('umkm_products', [
-            'id' => $product->id,
-            'stock_qty' => 5,
-            'status' => ProductStatus::Aktif->value,
-        ]);
-    }
-
-    public function test_umkm_can_delete_owned_product_and_its_orders(): void
-    {
-        [$umkm, $product, $order] = $this->createUmkmOrder();
+        [$umkm, $product] = $this->createUmkmProduct();
 
         $this->withToken($umkm->createToken('testing')->plainTextToken)
             ->deleteJson('/api/umkm/products/'.$product->code)
@@ -62,12 +26,11 @@ class UmkmOrderPersistenceTest extends TestCase
             ->assertJsonPath('success', true);
 
         $this->assertDatabaseMissing('umkm_products', ['id' => $product->id]);
-        $this->assertDatabaseMissing('umkm_orders', ['id' => $order->id]);
     }
 
     public function test_deleting_product_releases_its_unused_received_source_batch(): void
     {
-        [$umkm, $product] = $this->createUmkmOrder();
+        [$umkm, $product] = $this->createUmkmProduct();
         $farmer = User::factory()->create([
             'role' => UserRole::Petani->value,
         ]);
@@ -109,7 +72,7 @@ class UmkmOrderPersistenceTest extends TestCase
 
     public function test_umkm_cannot_delete_another_umkms_product(): void
     {
-        [, $product] = $this->createUmkmOrder();
+        [, $product] = $this->createUmkmProduct();
         $otherUmkm = User::factory()->create([
             'role' => UserRole::Umkm->value,
         ]);
@@ -122,9 +85,9 @@ class UmkmOrderPersistenceTest extends TestCase
     }
 
     /**
-     * @return array{User, UmkmProduct, UmkmOrder}
+     * @return array{User, UmkmProduct}
      */
-    private function createUmkmOrder(): array
+    private function createUmkmProduct(): array
     {
         $umkm = User::factory()->create([
             'role' => UserRole::Umkm->value,
@@ -139,16 +102,6 @@ class UmkmOrderPersistenceTest extends TestCase
             'status' => ProductStatus::Aktif->value,
         ]);
 
-        $order = UmkmOrder::create([
-            'code' => 'ORD-TEST-001',
-            'umkm_product_id' => $product->id,
-            'buyer_name' => 'Rina Saputri',
-            'buyer_address' => 'Jember',
-            'quantity' => 2,
-            'total_amount' => 136000,
-            'status' => OrderStatus::Diproses->value,
-        ]);
-
-        return [$umkm, $product, $order];
+        return [$umkm, $product];
     }
 }

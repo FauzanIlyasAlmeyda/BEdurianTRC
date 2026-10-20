@@ -3,18 +3,15 @@
 namespace Database\Seeders;
 
 use App\Enums\HarvestBatchStatus;
-use App\Enums\OrderStatus;
 use App\Enums\ProductStatus;
 use App\Enums\ReceiptCondition;
 use App\Enums\ShipmentDestination;
 use App\Enums\ShipmentStatus;
-use App\Enums\ConsumerTransactionStatus;
 use App\Enums\UserRole;
 use App\Models\CollectorProfile;
 use App\Models\CollectorShipment;
 use App\Models\CollectorShipmentSource;
 use App\Models\ConsumerProfile;
-use App\Models\ConsumerTransaction;
 use App\Models\DistributorProfile;
 use App\Models\DistributorReceipt;
 use App\Models\Farm;
@@ -22,7 +19,6 @@ use App\Models\FarmerProfile;
 use App\Models\HarvestBatch;
 use App\Models\HarvestBatchEvent;
 use App\Models\HarvestBatchGradeBreakdown;
-use App\Models\UmkmOrder;
 use App\Models\UmkmProduct;
 use App\Models\UmkmProductSource;
 use App\Models\UmkmProfile;
@@ -186,37 +182,6 @@ class DemoDataSeeder extends Seeder
                     'source_code_snapshot' => $batchOne->code,
                     'weight_kg' => $batchOne->quantity_kg,
                     'fruit_count' => $batchOne->fruit_count,
-                ]
-            );
-
-            $order = UmkmOrder::firstOrCreate(
-                ['code' => 'ORD-2026-0001'],
-                [
-                    'umkm_product_id' => $product->id,
-                    'buyer_name' => 'Rina Saputri',
-                    'buyer_phone' => '081299998888',
-                    'buyer_address' => 'Kabupaten Jember, Jawa Timur',
-                    'quantity' => 2,
-                    'total_amount' => 136000,
-                    'qr_code_data' => 'ORD-2026-0001',
-                    'note' => 'Bayar di tempat.',
-                    'status' => OrderStatus::Diproses->value,
-                ]
-            );
-
-            $transaction = ConsumerTransaction::firstOrCreate(
-                ['code' => 'TRX-2026-0001'],
-                [
-                    'consumer_user_id' => $consumer->id,
-                    'umkm_product_id' => $product->id,
-                    'product_name_snapshot' => $product->name,
-                    'quantity' => 2,
-                    'total_amount' => 136000,
-                    'buyer_coordinates' => '-8.2285, 113.6204',
-                    'payment_status' => 'unpaid',
-                    'status' => ConsumerTransactionStatus::Processing->value,
-                    'qr_code_data' => 'TRX-2026-0001',
-                    'note' => 'Menunggu pembayaran.',
                 ]
             );
 

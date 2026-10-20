@@ -210,31 +210,41 @@ class FarmerSelectedRecipientTest extends TestCase
             ->assertJsonCount(1, 'data');
     }
 
-    public function test_farmer_batch_photo_is_stored_and_returned_as_public_url(): void
+    public function test_farmer_batch_photo_is_uploaded_and_exposed_to_public_trace(): void
     {
         Storage::fake('public');
+
         $farmer = $this->makeUser(UserRole::Petani->value);
-        $recipient = $this->makeUser(UserRole::Pengepul->value);
+        $recipient = $this->makeUser(UserRole::Umkm->value);
+        $photo = UploadedFile::fake()->createWithContent(
+            'durian.png',
+            base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=')
+        );
 
         $response = $this->asUser($farmer)->post('/api/farmer/batches', [
             'recipient_user_id' => $recipient->id,
-            'recipient_role' => 'collector',
-            'quantity_kg' => 25,
-            'photo' => UploadedFile::fake()->createWithContent(
-                'durian.png',
-                base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l8kAAAAASUVORK5CYII='),
-            ),
-        ]);
+            'recipient_role' => UserRole::Umkm->value,
+            'quantity_kg' => 40,
+            'photo' => $photo,
+        ], ['Accept' => 'application/json']);
 
         $response->assertCreated()
-            ->assertJsonPath('data.batch.photo_path', fn ($path) => is_string($path))
-            ->assertJsonPath('data.batch.photo_url', fn ($url) => str_starts_with($url, '/storage/'));
-        $path = $response->json('data.batch.photo_path');
-        Storage::disk('public')->assertExists($path);
-        $this->assertDatabaseHas('harvest_batches', [
-            'farmer_user_id' => $farmer->id,
-            'photo_path' => $path,
-        ]);
+            ->assertJsonPath('data.batch.photo_path', fn ($value) => str_starts_with($value, '/storage/uploads/batches/'))
+            ->assertJsonPath('data.batch.photo_url', fn ($value) => str_starts_with($value, '/storage/uploads/batches/'));
+
+        $storedPath = str_replace('/storage/', '', $response->json('data.batch.photo_path'));
+        Storage::disk('public')->assertExists($storedPath);
+
+        $this->asUser($recipient)->postJson('/api/umkm/batches/'.$response->json('data.code').'/receive', [
+            'received_quantity_kg' => 40,
+            'received_fruit_count' => 0,
+        ])
+            ->assertOk();
+
+        $this->getJson('/api/trace/'.$response->json('data.code'))
+            ->assertOk()
+            ->assertJsonPath('data.batch.photo_path', $response->json('data.batch.photo_path'))
+            ->assertJsonPath('data.batch.photo_url', $response->json('data.batch.photo_url'));
     }
 
     public function test_only_the_selected_collector_can_list_and_verify_a_targeted_batch(): void
