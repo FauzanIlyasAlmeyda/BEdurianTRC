@@ -80,7 +80,9 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::delete('/products/{code}', [UmkmController::class, 'destroyProduct']);
         Route::get('/batches', [UmkmController::class, 'batches']);
         Route::get('/material-batches', [UmkmController::class, 'materialBatches']);
+        Route::get('/incoming-shipments', [UmkmController::class, 'incomingShipments']);
         Route::post('/batches/{code}/receive', [UmkmController::class, 'receiveBatch']);
+        Route::post('/incoming-shipments/{code}/receive', [UmkmController::class, 'receiveShipment']);
     });
 
     Route::prefix('sales')->group(function (): void {
