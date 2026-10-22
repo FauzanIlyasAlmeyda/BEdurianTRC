@@ -53,12 +53,12 @@ class CollectorController extends Controller
                 UserRole::Umkm->value,
                 UserRole::Konsumen->value,
             ])],
-            'search' => ['required', 'string', 'min:1', 'max:100'],
+            'search' => ['nullable', 'string', 'max:100'],
         ]);
         $lookupRole = $data['role'] === 'collector'
             ? UserRole::Pengepul->value
             : $data['role'];
-        $search = $data['search'];
+        $search = trim((string) ($data['search'] ?? ''));
         $profileRelation = match ($lookupRole) {
             UserRole::Pengepul->value => 'collectorProfile',
             UserRole::Distributor->value => 'distributorProfile',
@@ -71,19 +71,24 @@ class CollectorController extends Controller
             UserRole::Konsumen->value => 'display_name',
         };
 
+        $query = User::query()->where('is_active', true)->whereKeyNot($user->id)
+            ->where('role', $lookupRole);
+
+        if ($search !== '') {
+            $query->where(function ($query) use ($search, $profileRelation, $profileNameColumn): void {
+                $query->where('public_account_id', 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhereHas($profileRelation, fn ($profileQuery) => $profileQuery
+                        ->where($profileNameColumn, 'like', "%{$search}%"));
+                if (ctype_digit($search)) {
+                    $query->orWhere('id', (int) $search);
+                }
+            });
+        }
+
         return ApiResponse::success(
-            User::query()->where('is_active', true)->whereKeyNot($user->id)
-                ->where('role', $lookupRole)
-                ->where(function ($query) use ($search, $profileRelation, $profileNameColumn): void {
-                    $query->where('public_account_id', 'like', "%{$search}%")
-                        ->orWhere('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
-                        ->orWhereHas($profileRelation, fn ($profileQuery) => $profileQuery
-                            ->where($profileNameColumn, 'like', "%{$search}%"));
-                    if (ctype_digit($search)) {
-                        $query->orWhere('id', (int) $search);
-                    }
-                })
+            $query
                 ->with(['distributorProfile', 'umkmProfile', 'consumerProfile', 'collectorProfile'])
                 ->orderBy('first_name')->limit(50)->get()->map(function (User $recipient): array {
                     $profile = match ($recipient->role) {
@@ -442,9 +447,7 @@ class CollectorController extends Controller
 
         foreach ($shipment->sources as $source) {
             if ($source->batch) {
-                $nextStatus = $shipment->destination_type === ShipmentDestination::Umkm->value
-                    ? HarvestBatchStatus::ReceivedByUmkm->value
-                    : HarvestBatchStatus::InDistribution->value;
+                $nextStatus = HarvestBatchStatus::InDistribution->value;
 
                 $source->batch->forceFill([
                     'status' => $nextStatus,

@@ -63,12 +63,12 @@ class DistributorSaleController extends Controller
                 UserRole::Distributor->value,
                 UserRole::Umkm->value,
             ])],
-            'search' => ['required', 'string', 'min:1', 'max:100'],
+            'search' => ['nullable', 'string', 'max:100'],
         ]);
         $lookupRole = $data['role'] === 'collector'
             ? UserRole::Pengepul->value
             : $data['role'];
-        $search = $data['search'];
+        $search = trim((string) ($data['search'] ?? ''));
         $profileRelation = match ($lookupRole) {
             UserRole::Pengepul->value => 'collectorProfile',
             UserRole::Distributor->value => 'distributorProfile',
@@ -78,11 +78,13 @@ class DistributorSaleController extends Controller
             ? 'name'
             : 'business_name';
 
-        $recipients = User::query()
+        $recipientQuery = User::query()
             ->where('is_active', true)
             ->whereKeyNot($user->id)
-            ->where('role', $lookupRole)
-            ->where(function ($query) use ($search, $profileRelation, $profileNameColumn): void {
+            ->where('role', $lookupRole);
+
+        if ($search !== '') {
+            $recipientQuery->where(function ($query) use ($search, $profileRelation, $profileNameColumn): void {
                 $query->where('public_account_id', 'like', "%{$search}%")
                     ->orWhere('first_name', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%")
@@ -91,7 +93,10 @@ class DistributorSaleController extends Controller
                 if (ctype_digit($search)) {
                     $query->orWhere('id', (int) $search);
                 }
-            })
+            });
+        }
+
+        $recipients = $recipientQuery
             ->with(['collectorProfile', 'distributorProfile', 'umkmProfile'])
             ->orderBy('first_name')
             ->orderBy('last_name')

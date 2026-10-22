@@ -19,6 +19,7 @@ class Farm extends Model
         'district',
         'village',
         'address',
+        'photo_path',
         'latitude',
         'longitude',
         'notes',

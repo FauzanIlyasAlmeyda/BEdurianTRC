@@ -94,10 +94,16 @@ class FarmerController extends Controller
             'district' => ['nullable', 'string', 'max:100'],
             'village' => ['nullable', 'string', 'max:100'],
             'address' => ['nullable', 'string'],
+            'photo' => ['nullable', 'image', 'max:4096'],
             'latitude' => ['nullable', 'numeric'],
             'longitude' => ['nullable', 'numeric'],
             'notes' => ['nullable', 'string'],
         ]);
+
+        if ($request->hasFile('photo')) {
+            $data['photo_path'] = $this->storeFarmPhoto($request);
+        }
+        unset($data['photo']);
 
         $farm = Farm::create($data + [
             'farmer_user_id' => $user->id,
@@ -139,26 +145,29 @@ class FarmerController extends Controller
                 UserRole::Umkm->value,
                 UserRole::Distributor->value,
             ])],
-            'search' => ['required', 'string', 'min:1', 'max:100'],
+            'search' => ['nullable', 'string', 'max:100'],
         ]);
 
         $lookupRole = $data['role'] === 'collector'
             ? UserRole::Pengepul->value
             : $data['role'];
-        $search = trim($data['search']);
+        $search = trim((string) ($data['search'] ?? ''));
 
         $recipients = User::query()
-            ->select(['id', 'public_account_id', 'first_name', 'last_name', 'role'])
+            ->select(['id', 'public_account_id', 'username', 'first_name', 'last_name', 'role'])
             ->where('role', $lookupRole)
             ->where('is_active', true)
             ->whereKeyNot($user->id)
-            ->where(function ($query) use ($search): void {
-                $query->where('public_account_id', 'like', "%{$search}%")
-                    ->orWhere('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%");
-                if (ctype_digit($search)) {
-                    $query->orWhere('id', (int) $search);
-                }
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($query) use ($search): void {
+                    $query->where('public_account_id', 'like', "%{$search}%")
+                        ->orWhere('username', 'like', "%{$search}%")
+                        ->orWhere('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%");
+                    if (ctype_digit($search)) {
+                        $query->orWhere('id', (int) $search);
+                    }
+                });
             })
             ->orderBy('first_name')
             ->orderBy('last_name')
@@ -166,8 +175,9 @@ class FarmerController extends Controller
             ->get()
             ->map(fn (User $recipient): array => [
                 'id' => $recipient->id,
-                'public_id' => $recipient->public_account_id ?? (string) $recipient->id,
-                'public_account_id' => $recipient->public_account_id ?? (string) $recipient->id,
+                'public_id' => $recipient->public_account_id ?? $recipient->username ?? (string) $recipient->id,
+                'public_account_id' => $recipient->public_account_id ?? $recipient->username ?? (string) $recipient->id,
+                'username' => $recipient->username,
                 'first_name' => $recipient->first_name,
                 'last_name' => $recipient->last_name,
                 'full_name' => $recipient->full_name,
@@ -209,8 +219,14 @@ class FarmerController extends Controller
             'storage_suggestion' => ['nullable', 'string', 'max:191'],
             'notes' => ['nullable', 'string'],
             'photo_path' => ['nullable', 'string', 'max:255'],
-            'photo' => ['nullable', 'image', 'max:10240'],
+            'photo' => ['nullable', 'image', 'max:4096'],
         ]);
+
+        if ($request->hasFile('photo')) {
+            $data['photo_path'] = $this->storeBatchPhoto($request);
+        }
+        unset($data['photo']);
+
         $recipientRole = $data['recipient_role'] === 'collector'
             ? UserRole::Pengepul->value
             : $data['recipient_role'];
@@ -226,11 +242,6 @@ class FarmerController extends Controller
                 'recipient_user_id' => ['Penerima harus akun aktif dengan role yang dipilih.'],
             ]);
         }
-        if ($request->hasFile('photo')) {
-            $data['photo_path'] = $request->file('photo')->store('batch-photos', 'public');
-        }
-        unset($data['photo']);
-
         $data['recipient_role'] = $data['recipient_role'] === UserRole::Pengepul->value
             ? 'collector'
             : $data['recipient_role'];
@@ -258,19 +269,20 @@ class FarmerController extends Controller
             return $batch->load(['farm', 'events', 'gradeBreakdowns']);
         });
 
-        return ApiResponse::created(
-            [
-                'code' => $batch->code,
-                'status' => $batch->status,
-                'batch' => ContractFormatter::batch($batch),
-                'recipient_user_id' => $batch->recipient_user_id,
-                'recipient_role' => $batch->recipient_role === UserRole::Pengepul->value
-                    ? 'collector'
-                    : $batch->recipient_role,
-                'harvest_date' => $batch->harvest_date?->toDateString(),
-            ],
-            'Batch berhasil dibuat'
+        $formattedBatch = ContractFormatter::batch(
+            $batch->fresh(['farm', 'events', 'gradeBreakdowns', 'recipient'])
         );
+
+        return ApiResponse::created([
+            'batch' => $formattedBatch,
+            'code' => $batch->code,
+            'status' => $batch->status,
+            'recipient_user_id' => $batch->recipient_user_id,
+            'recipient_role' => $batch->recipient_role === UserRole::Pengepul->value
+                ? 'collector'
+                : $batch->recipient_role,
+            'harvest_date' => $batch->harvest_date?->toDateString(),
+        ], 'Batch berhasil dibuat');
     }
 
     public function showBatch(Request $request, string $code): JsonResponse
@@ -310,7 +322,13 @@ class FarmerController extends Controller
             'latitude' => ['nullable', 'numeric'],
             'longitude' => ['nullable', 'numeric'],
             'notes' => ['nullable', 'string'],
+            'photo' => ['nullable', 'image', 'max:4096'],
         ]);
+
+        if ($request->hasFile('photo')) {
+            $data['photo_path'] = $this->storeFarmPhoto($request);
+        }
+        unset($data['photo']);
 
         $farm->fill($data)->save();
 
@@ -373,8 +391,14 @@ class FarmerController extends Controller
             'storage_suggestion' => ['nullable', 'string', 'max:191'],
             'notes' => ['nullable', 'string'],
             'photo_path' => ['nullable', 'string', 'max:255'],
-            'photo' => ['nullable', 'image', 'max:10240'],
+            'photo' => ['nullable', 'image', 'max:4096'],
         ]);
+
+        if ($request->hasFile('photo')) {
+            $data['photo_path'] = $this->storeBatchPhoto($request);
+        }
+        unset($data['photo']);
+
         if (isset($data['farm_id'])) {
             $farm = Farm::query()->whereKey($data['farm_id'])->where('farmer_user_id', $user->id)->firstOrFail();
             $data['farm_name_snapshot'] = $data['farm_name_snapshot'] ?? $farm->name;
@@ -392,7 +416,12 @@ class FarmerController extends Controller
             'status' => $batch->status,
         ]);
 
+        $formattedBatch = ContractFormatter::batch(
+            $batch->fresh(['farm', 'events', 'gradeBreakdowns', 'recipient'])
+        );
+
         return ApiResponse::success([
+            'batch' => $formattedBatch,
             'code' => $batch->code,
             'status' => $batch->status,
             'batch' => ContractFormatter::batch($batch->fresh(['farm', 'events', 'gradeBreakdowns'])),
@@ -424,5 +453,19 @@ class FarmerController extends Controller
     private function ensureRole(?User $user, string $role): void
     {
         abort_unless($user && $user->role === $role, 403, 'Forbidden');
+    }
+
+    private function storeBatchPhoto(Request $request): string
+    {
+        $path = $request->file('photo')->store('uploads/batches', 'public');
+
+        return '/storage/' . $path;
+    }
+
+    private function storeFarmPhoto(Request $request): string
+    {
+        $path = $request->file('photo')->store('uploads/farms', 'public');
+
+        return '/storage/' . $path;
     }
 }
