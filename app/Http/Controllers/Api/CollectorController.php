@@ -447,9 +447,7 @@ class CollectorController extends Controller
 
         foreach ($shipment->sources as $source) {
             if ($source->batch) {
-                $nextStatus = $shipment->destination_type === ShipmentDestination::Umkm->value
-                    ? HarvestBatchStatus::ReceivedByUmkm->value
-                    : HarvestBatchStatus::InDistribution->value;
+                $nextStatus = HarvestBatchStatus::InDistribution->value;
 
                 $source->batch->forceFill([
                     'status' => $nextStatus,

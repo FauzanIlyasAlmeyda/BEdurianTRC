@@ -129,14 +129,32 @@ class UmkmController extends Controller
         $user = $request->user();
         $this->ensureRole($user, UserRole::Umkm->value);
 
+        \Log::info('UMKM incoming shipments request', [
+            'umkm_user_id' => $user->id,
+            'umkm_email' => $user->email,
+        ]);
+
+        $shipments = CollectorShipment::query()
+            ->where('destination_type', 'umkm')
+            ->where('destination_user_id', $user->id)
+            ->whereIn('status', [
+                ShipmentStatus::ReadyToShip->value,
+                ShipmentStatus::Sent->value,
+            ])
+            ->latest()
+            ->get();
+
+        \Log::info('UMKM incoming shipments result', [
+            'count' => $shipments->count(),
+            'shipments' => $shipments->map(fn($s) => [
+                'code' => $s->code,
+                'status' => $s->status,
+                'destination_user_id' => $s->destination_user_id,
+            ])->toArray(),
+        ]);
+
         return ApiResponse::success(
-            CollectorShipment::query()
-                ->with('sources.batch')
-                ->where('destination_type', 'umkm')
-                ->where('destination_user_id', $user->id)
-                ->where('status', ShipmentStatus::Sent->value)
-                ->latest()
-                ->get()
+            $shipments
                 ->map(fn (CollectorShipment $shipment): array => ContractFormatter::shipment($shipment))
                 ->values()
                 ->all()
@@ -155,8 +173,12 @@ class UmkmController extends Controller
             ->where('code', $code)
             ->firstOrFail();
 
-        if ($shipment->status !== ShipmentStatus::Sent->value) {
-            return ApiResponse::error('Shipment hanya bisa diterima saat berstatus sent', 422);
+        if (! in_array($shipment->status, [
+            ShipmentStatus::ReadyToShip->value,
+            ShipmentStatus::Sent->value,
+            ShipmentStatus::Completed->value,
+        ], true)) {
+            return ApiResponse::error('Shipment belum siap diterima UMKM', 422);
         }
 
         DB::transaction(function () use ($shipment, $user): void {
