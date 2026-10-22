@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Enums\OrderStatus;
 use App\Enums\HarvestBatchStatus;
 use App\Enums\ProductStatus;
+use App\Enums\ShipmentStatus;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use App\Support\ContractFormatter;
+use App\Models\CollectorShipment;
 use App\Models\UmkmProfile;
 use App\Models\HarvestBatch;
 use App\Models\UmkmOrder;
@@ -116,6 +118,84 @@ class UmkmController extends Controller
             ->map(fn (HarvestBatch $batch): array => ContractFormatter::batch($batch))
             ->values()
             ->all());
+    }
+
+    public function incomingShipments(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Umkm->value);
+
+        return ApiResponse::success(
+            CollectorShipment::query()
+                ->with('sources.batch')
+                ->where('destination_type', UserRole::Umkm->value)
+                ->where('destination_user_id', $user->id)
+                ->where('status', ShipmentStatus::Sent->value)
+                ->latest()
+                ->get()
+                ->map(fn (CollectorShipment $shipment): array => ContractFormatter::shipment($shipment))
+                ->values()
+                ->all()
+        );
+    }
+
+    public function receiveShipment(Request $request, string $code): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Umkm->value);
+
+        $shipment = DB::transaction(function () use ($user, $code): ?CollectorShipment {
+            $shipment = CollectorShipment::query()
+                ->where('code', $code)
+                ->where('destination_type', UserRole::Umkm->value)
+                ->where('destination_user_id', $user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($shipment->status !== ShipmentStatus::Sent->value) {
+                return null;
+            }
+
+            $shipment->forceFill([
+                'status' => ShipmentStatus::Completed->value,
+                'completed_at' => now(),
+            ])->save();
+
+            $shipment->load('sources.batch');
+            foreach ($shipment->sources as $source) {
+                if (! $source->batch) {
+                    continue;
+                }
+
+                $source->batch->forceFill([
+                    'status' => HarvestBatchStatus::ReceivedByUmkm->value,
+                    'recipient_user_id' => $user->id,
+                    'recipient_role' => UserRole::Umkm->value,
+                    'received_quantity_kg' => $source->source_weight_kg,
+                    'received_fruit_count' => $source->source_fruit_count,
+                    'verified_by_user_id' => $user->id,
+                    'verified_at' => now(),
+                ])->save();
+
+                Traceability::recordEvent($source->batch, 'Shipment Diterima UMKM', $user, [
+                    'status' => HarvestBatchStatus::ReceivedByUmkm->value,
+                    'shipment_code' => $shipment->code,
+                ]);
+            }
+
+            return $shipment->load('sources');
+        });
+
+        if (! $shipment) {
+            return ApiResponse::error('Shipment hanya bisa diterima saat status sent', 422);
+        }
+
+        return ApiResponse::success([
+            'code' => $shipment->code,
+            'status' => $shipment->status,
+            'completed_at' => $shipment->completed_at?->toISOString(),
+            'shipment' => ContractFormatter::shipment($shipment),
+        ], 'Shipment diterima UMKM');
     }
 
     public function receiveBatch(Request $request, string $code): JsonResponse

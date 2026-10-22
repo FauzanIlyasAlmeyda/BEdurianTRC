@@ -8,8 +8,11 @@ use App\Http\Controllers\Api\ConsumerProductValidationController;
 use App\Http\Controllers\Api\DistributorController;
 use App\Http\Controllers\Api\DistributorSaleController;
 use App\Http\Controllers\Api\FarmerController;
+use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\PublicTraceController;
 use App\Http\Controllers\Api\UmkmController;
+
+Route::get('/health', HealthController::class);
 
 Route::post('/register',[AuthController::class,'register']);
 
@@ -85,6 +88,8 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::get('/batches', [UmkmController::class, 'batches']);
         Route::get('/material-batches', [UmkmController::class, 'materialBatches']);
         Route::post('/batches/{code}/receive', [UmkmController::class, 'receiveBatch']);
+        Route::get('/incoming-shipments', [UmkmController::class, 'incomingShipments']);
+        Route::post('/incoming-shipments/{code}/receive', [UmkmController::class, 'receiveShipment']);
     });
 
     Route::prefix('sales')->group(function (): void {

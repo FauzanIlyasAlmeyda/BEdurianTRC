@@ -20,6 +20,16 @@ Saat ini ada dummy blockchain ledger untuk menyiapkan integrasi blockchain sungg
 - `GET /api/me`
 - `POST /api/logout`
 - `GET /api/trace/{batchCode}`
+- `GET /api/health` — cek status backend dan koneksi database, tanpa autentikasi.
+
+Bot Telegram dapat memanggil endpoint health tanpa token. Respons HTTP `200`
+dan `data.status: "ok"` berarti backend serta database sehat. Jika database
+tidak dapat diakses, endpoint mengembalikan HTTP `503` dengan
+`data.status: "error"` dan `data.services.database: "error"`.
+
+```sh
+curl https://domain-backend/api/health
+```
 
 ### Role Pengguna
 
@@ -41,7 +51,11 @@ Saat ini ada dummy blockchain ledger untuk menyiapkan integrasi blockchain sungg
 
 ### Akun Seed
 
-Seeder menyediakan akun contoh untuk tiap role dengan password `password`.
+`UserSeeder` membuat lima akun contoh, satu untuk tiap role, beserta profil dan
+alamat masing-masing. Jalankan `php artisan db:seed` secara eksplisit; seeder ini tidak
+dijalankan otomatis saat migrasi. Nilai akun contoh dapat diubah di
+`database/seeders/UserSeeder.php` sebelum digunakan. Seeder hanya membuat akun
+dan profil, tidak membuat data kebun, batch, transaksi, atau data demo lainnya.
 
 ### Deploy Laravel dengan Docker di VPS
 
