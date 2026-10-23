@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use App\Support\ContractFormatter;
+use App\Support\ProfileAvatarStorage;
 use App\Models\ConsumerProfile;
 use App\Models\ConsumerTransaction;
 use App\Models\UmkmProduct;
@@ -48,7 +49,6 @@ class ConsumerController extends Controller
             'city' => ['required', 'string', 'max:100'],
             'province' => ['required', 'string', 'max:100'],
             'phone' => ['nullable', 'string', 'max:50'],
-            'avatar_path' => ['nullable', 'string', 'max:255'],
         ]);
 
         $profile = ConsumerProfile::updateOrCreate([
@@ -58,6 +58,23 @@ class ConsumerController extends Controller
         ]);
 
         return ApiResponse::success($profile, 'Profil konsumen diperbarui');
+    }
+
+    public function updateAvatar(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Konsumen->value);
+        ProfileAvatarStorage::validate($request);
+
+        $profile = ConsumerProfile::firstOrCreate([
+            'user_id' => $user->id,
+        ], [
+            'display_name' => $user->full_name,
+        ]);
+        $profile->avatar_path = ProfileAvatarStorage::update($request, $profile->avatar_path);
+        $profile->save();
+
+        return ApiResponse::success($profile, 'Foto profil konsumen diperbarui');
     }
 
     public function products(Request $request): JsonResponse

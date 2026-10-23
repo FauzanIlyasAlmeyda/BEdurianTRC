@@ -7,6 +7,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use App\Support\ContractFormatter;
+use App\Support\ProfileAvatarStorage;
 use App\Models\Farm;
 use App\Models\FarmerProfile;
 use App\Models\HarvestBatch;
@@ -49,7 +50,6 @@ class FarmerController extends Controller
             'city' => ['required', 'string', 'max:100'],
             'province' => ['required', 'string', 'max:100'],
             'contact' => ['nullable', 'string', 'max:50'],
-            'avatar_path' => ['nullable', 'string', 'max:255'],
         ]);
 
         $profile = FarmerProfile::updateOrCreate(
@@ -64,6 +64,25 @@ class FarmerController extends Controller
             'user' => $user->refresh(),
             'profile' => $profile,
         ], 'Profil petani diperbarui');
+    }
+
+    public function updateAvatar(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Petani->value);
+        ProfileAvatarStorage::validate($request);
+
+        $profile = FarmerProfile::firstOrCreate(
+            ['user_id' => $user->id],
+            ['full_name' => $user->full_name, 'role_label' => 'Petani'],
+        );
+        $profile->avatar_path = ProfileAvatarStorage::update($request, $profile->avatar_path);
+        $profile->save();
+
+        return ApiResponse::success([
+            'user' => $user->refresh(),
+            'profile' => $profile,
+        ], 'Foto profil petani diperbarui');
     }
 
     public function farms(Request $request): JsonResponse

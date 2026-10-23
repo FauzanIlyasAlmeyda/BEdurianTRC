@@ -9,6 +9,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use App\Support\ContractFormatter;
+use App\Support\ProfileAvatarStorage;
 use App\Models\CollectorProfile;
 use App\Models\CollectorShipment;
 use App\Models\CollectorShipmentSource;
@@ -194,7 +195,6 @@ class CollectorController extends Controller
             'city' => ['required', 'string', 'max:100'],
             'province' => ['required', 'string', 'max:100'],
             'contact' => ['nullable', 'string', 'max:50'],
-            'avatar_path' => ['nullable', 'string', 'max:255'],
         ]);
 
         $profile = CollectorProfile::updateOrCreate([
@@ -207,6 +207,26 @@ class CollectorController extends Controller
             'user' => $user->refresh(),
             'profile' => $profile,
         ], 'Profil pengepul diperbarui');
+    }
+
+    public function updateAvatar(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Pengepul->value);
+        ProfileAvatarStorage::validate($request);
+
+        $profile = CollectorProfile::firstOrCreate([
+            'user_id' => $user->id,
+        ], [
+            'business_name' => $user->full_name,
+        ]);
+        $profile->avatar_path = ProfileAvatarStorage::update($request, $profile->avatar_path);
+        $profile->save();
+
+        return ApiResponse::success([
+            'user' => $user->refresh(),
+            'profile' => $profile,
+        ], 'Foto profil pengepul diperbarui');
     }
 
     public function stock(Request $request): JsonResponse

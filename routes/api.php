@@ -27,6 +27,7 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::prefix('farmer')->group(function (): void {
         Route::get('/profile', [FarmerController::class, 'profile']);
         Route::put('/profile', [FarmerController::class, 'updateProfile']);
+        Route::post('/profile/avatar', [FarmerController::class, 'updateAvatar']);
         Route::get('/farms', [FarmerController::class, 'farms']);
         Route::post('/farms', [FarmerController::class, 'storeFarm']);
         Route::put('/farms/{id}', [FarmerController::class, 'updateFarm']);
@@ -42,6 +43,7 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::prefix('collector')->group(function (): void {
         Route::get('/profile', [CollectorController::class, 'profile']);
         Route::put('/profile', [CollectorController::class, 'updateProfile']);
+        Route::post('/profile/avatar', [CollectorController::class, 'updateAvatar']);
         Route::get('/stock', [CollectorController::class, 'stock']);
         Route::get('/batches', [CollectorController::class, 'batches']);
         Route::get('/warehouses', [CollectorController::class, 'warehouses']);
@@ -60,6 +62,7 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::prefix('distributor')->group(function (): void {
         Route::get('/profile', [DistributorController::class, 'profile']);
         Route::put('/profile', [DistributorController::class, 'updateProfile']);
+        Route::post('/profile/avatar', [DistributorController::class, 'updateAvatar']);
         Route::get('/warehouses', [DistributorController::class, 'warehouses']);
         Route::post('/warehouses', [DistributorController::class, 'storeWarehouse']);
         Route::put('/warehouses/{warehouse}', [DistributorController::class, 'updateWarehouse']);
@@ -99,6 +102,7 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::prefix('consumer')->group(function (): void {
         Route::get('/profile', [ConsumerController::class, 'profile']);
         Route::put('/profile', [ConsumerController::class, 'updateProfile']);
+        Route::post('/profile/avatar', [ConsumerController::class, 'updateAvatar']);
         Route::get('/products', [ConsumerController::class, 'products']);
         Route::get('/products/{code}', [ConsumerController::class, 'showProduct']);
         Route::get('/products/{code}/validation', [ConsumerProductValidationController::class, 'show']);
