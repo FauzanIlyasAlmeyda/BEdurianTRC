@@ -3,15 +3,20 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\ProductStatus;
+use App\Enums\ConsumerTransactionStatus;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use App\Support\ContractFormatter;
 use App\Models\ConsumerProfile;
+use App\Models\ConsumerTransaction;
 use App\Models\UmkmProduct;
 use App\Models\User;
+use App\Support\CodeGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ConsumerController extends Controller
 {
@@ -76,29 +81,179 @@ class ConsumerController extends Controller
         $this->ensureRole($request->user(), UserRole::Konsumen->value);
 
         $product = UmkmProduct::query()
-            ->with('sources.batch')
+            ->with(['sources.batch.events', 'umkm.umkmProfile'])
             ->where('code', $code)
+            ->where('status', ProductStatus::Aktif->value)
             ->firstOrFail();
-
-        $sourceBatch = $product->sources->first();
 
         return ApiResponse::success([
             'product' => array_merge(
                 ContractFormatter::product($product),
                 [
-                    'source_batch_code' => $sourceBatch?->source_code_snapshot,
-                    'source_variety' => $sourceBatch?->batch?->variety,
-                    'source_grade' => $sourceBatch?->batch?->grade,
-                    'source_origin_farm' => $sourceBatch?->batch?->farm_name_snapshot,
-                    'source_harvest_date' => $sourceBatch?->batch?->harvest_date?->toDateString(),
-                    'source_harvest_method' => $sourceBatch?->batch?->harvest_method,
-                    'source_maturity_level' => $sourceBatch?->batch?->maturity_level,
-                    'source_shelf_life_estimate' => $sourceBatch?->batch?->shelf_life_estimate,
-                    'source_verified_at' => $sourceBatch?->batch?->verified_at?->toISOString(),
-                    'source_quality_notes' => $sourceBatch?->batch?->quality_notes,
+                    'trace_sources' => $this->productTraceSources($product),
                 ],
             ),
         ]);
+    }
+
+    public function orders(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Konsumen->value);
+
+        return ApiResponse::success(
+            ConsumerTransaction::query()
+                ->where('consumer_user_id', $user->id)
+                ->latest()
+                ->get()
+                ->map(fn (ConsumerTransaction $transaction): array => $this->orderPayload($transaction))
+                ->values()
+                ->all()
+        );
+    }
+
+    public function storeOrder(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Konsumen->value);
+
+        $data = $request->validate([
+            'product_code' => ['required', 'string', 'exists:umkm_products,code'],
+            'quantity' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $transaction = DB::transaction(function () use ($user, $data): ConsumerTransaction {
+            $product = UmkmProduct::query()
+                ->with(['sources.batch.events', 'umkm.umkmProfile'])
+                ->where('code', $data['product_code'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($product->status !== ProductStatus::Aktif->value) {
+                throw ValidationException::withMessages([
+                    'product_code' => ['Produk sedang tidak aktif.'],
+                ]);
+            }
+
+            if ((int) $product->stock_qty < (int) $data['quantity']) {
+                throw ValidationException::withMessages([
+                    'quantity' => ['Jumlah melebihi stok produk yang tersedia.'],
+                ]);
+            }
+
+            $traceSnapshot = [
+                'product_code' => $product->code,
+                'product_name' => $product->name,
+                'umkm_name' => $product->umkm?->umkmProfile?->name
+                    ?? $product->umkm?->full_name,
+                'sources' => $this->productTraceSources($product),
+            ];
+
+            $transaction = ConsumerTransaction::create([
+                'code' => CodeGenerator::transaction(),
+                'consumer_user_id' => $user->id,
+                'umkm_product_id' => $product->id,
+                'product_name_snapshot' => $product->name,
+                'quantity' => $data['quantity'],
+                'total_amount' => (float) $product->price * (int) $data['quantity'],
+                'buyer_address' => ConsumerProfile::query()
+                    ->where('user_id', $user->id)
+                    ->value('address'),
+                'payment_method' => 'outside_app',
+                'payment_status' => 'outside_app',
+                'status' => ConsumerTransactionStatus::Processing->value,
+                'trace_snapshot' => $traceSnapshot,
+            ]);
+
+            $product->forceFill([
+                'stock_qty' => (int) $product->stock_qty - (int) $data['quantity'],
+            ])->save();
+
+            return $transaction;
+        });
+
+        return ApiResponse::created(
+            $this->orderPayload($transaction),
+            'Pesanan berhasil dibuat'
+        );
+    }
+
+    public function cancelOrder(Request $request, string $code): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Konsumen->value);
+
+        $transaction = DB::transaction(function () use ($user, $code): ?ConsumerTransaction {
+            $transaction = ConsumerTransaction::query()
+                ->where('code', $code)
+                ->where('consumer_user_id', $user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($transaction->status !== ConsumerTransactionStatus::Processing->value) {
+                return null;
+            }
+
+            $transaction->forceFill([
+                'status' => ConsumerTransactionStatus::Cancelled->value,
+            ])->save();
+
+            if ($transaction->umkm_product_id !== null) {
+                $product = UmkmProduct::query()
+                    ->whereKey($transaction->umkm_product_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($product) {
+                    $product->increment('stock_qty', (int) $transaction->quantity);
+                }
+            }
+
+            return $transaction;
+        });
+
+        if (! $transaction) {
+            return ApiResponse::error('Pesanan ini tidak dapat dibatalkan', 422);
+        }
+
+        return ApiResponse::success(
+            $this->orderPayload($transaction),
+            'Pesanan dibatalkan dan stok dikembalikan'
+        );
+    }
+
+    public function validateOrder(Request $request, string $code): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Konsumen->value);
+
+        $transaction = DB::transaction(function () use ($user, $code): ?ConsumerTransaction {
+            $transaction = ConsumerTransaction::query()
+                ->where('code', $code)
+                ->where('consumer_user_id', $user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($transaction->status !== ConsumerTransactionStatus::Processing->value) {
+                return null;
+            }
+
+            $transaction->forceFill([
+                'status' => ConsumerTransactionStatus::Completed->value,
+                'processed_at' => now(),
+            ])->save();
+
+            return $transaction;
+        });
+
+        if (! $transaction) {
+            return ApiResponse::error('Pesanan ini tidak dapat divalidasi', 422);
+        }
+
+        return ApiResponse::success(
+            $this->orderPayload($transaction),
+            'Pesanan divalidasi; struk trace produk tersedia'
+        );
     }
 
     private function ensureRole(?User $user, string $role): void
@@ -114,17 +269,72 @@ class ConsumerController extends Controller
             'code' => $product->code,
             'name' => $product->name,
             'category' => $product->category ?? 'Paket',
-            'status' => 'readyToSell',
+            'status' => (int) $product->stock_qty > 0 ? 'readyToSell' : 'soldOut',
             'price_label' => ContractFormatter::moneyLabel($product->price),
             'short_description' => $product->description ? str($product->description)->limit(80)->toString() : null,
             'umkm_name' => $profile?->name ?? $product->umkm?->full_name,
             'location' => $profile?->address,
             'rating' => 4.9,
             'stock_label' => 'Stok ' . (int) $product->stock_qty . ' paket',
+            'stock_qty' => (int) $product->stock_qty,
+            'price' => (float) $product->price,
             'photo_path' => $product->photo_path,
             'image_path' => $product->photo_path,
             'photo_url' => ContractFormatter::imageUrl($product->photo_path),
             'image_url' => ContractFormatter::imageUrl($product->photo_path),
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function productTraceSources(UmkmProduct $product): array
+    {
+        return $product->sources
+            ->map(function ($source): array {
+                $batch = $source->batch;
+
+                return [
+                    'batch_code' => $source->source_code_snapshot,
+                    'variety' => $batch?->variety,
+                    'grade' => $batch?->grade,
+                    'farm_name' => $batch?->farm_name_snapshot,
+                    'farmer_name' => $batch?->farmer?->full_name,
+                    'harvest_date' => $batch?->harvest_date?->toDateString(),
+                    'timeline' => $batch
+                        ? ContractFormatter::batchTimeline($batch->loadMissing('events'))
+                        : [],
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function orderPayload(ConsumerTransaction $transaction): array
+    {
+        $trace = $transaction->trace_snapshot ?? [];
+
+        return [
+            'code' => $transaction->code,
+            'id' => $transaction->code,
+            'status' => $transaction->status,
+            'product_code' => $trace['product_code'] ?? null,
+            'product_name' => $transaction->product_name_snapshot
+                ?? $trace['product_name']
+                ?? 'Produk UMKM',
+            'umkm_name' => $trace['umkm_name'] ?? null,
+            'quantity' => (int) $transaction->quantity,
+            'total_amount' => (float) $transaction->total_amount,
+            'total_label' => ContractFormatter::moneyLabel($transaction->total_amount),
+            'buyer_address' => $transaction->buyer_address,
+            'payment_status' => $transaction->payment_status,
+            'created_at' => $transaction->created_at?->toISOString(),
+            'processed_at' => $transaction->processed_at?->toISOString(),
+            'qr_code_data' => $transaction->qr_code_data ?? $transaction->code,
+            'trace_sources' => $trace['sources'] ?? [],
         ];
     }
 

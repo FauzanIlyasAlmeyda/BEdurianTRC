@@ -271,9 +271,9 @@ class UmkmController extends Controller
         ]);
 
         if ($request->hasFile('photo')) {
-            $data['photo_path'] = $this->storePublicImage($request, 'photo', 'uploads/products');
+            $data['photo_path'] = $request->file('photo')->store('uploads/products', 'public');
         } elseif ($request->hasFile('image')) {
-            $data['photo_path'] = $this->storePublicImage($request, 'image', 'uploads/products');
+            $data['photo_path'] = $request->file('image')->store('uploads/products', 'public');
         }
         unset($data['photo'], $data['image']);
 
@@ -299,11 +299,6 @@ class UmkmController extends Controller
                 ]);
             }
         }
-        if ($request->hasFile('photo')) {
-            $data['photo_path'] = $request->file('photo')->store('product-photos', 'public');
-        }
-        unset($data['photo']);
-
         $product = DB::transaction(function () use ($user, $data) {
             $price = $this->resolvePrice($data);
             $stockQty = $this->resolveStock($data);
@@ -355,6 +350,66 @@ class UmkmController extends Controller
         return ApiResponse::created(
             ContractFormatter::product($product->load('sources.batch')),
             'Produk berhasil dibuat'
+        );
+    }
+
+    public function updateProduct(Request $request, string $code): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Umkm->value);
+
+        $product = UmkmProduct::query()
+            ->where('code', $code)
+            ->where('umkm_user_id', $user->id)
+            ->firstOrFail();
+
+        $data = $request->validate([
+            'category' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'name' => ['sometimes', 'required', 'string', 'max:150'],
+            'price' => ['sometimes', 'numeric', 'min:0'],
+            'price_label' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'stock_qty' => ['sometimes', 'integer', 'min:0'],
+            'stock_label' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'description' => ['sometimes', 'nullable', 'string'],
+            'status' => ['sometimes', 'required', Rule::in(ProductStatus::values())],
+            'photo_path' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'image_path' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'photo' => ['nullable', 'image', 'max:4096'],
+            'image' => ['nullable', 'image', 'max:4096'],
+        ]);
+
+        if ($request->hasFile('photo')) {
+            $data['photo_path'] = $request->file('photo')->store('uploads/products', 'public');
+        } elseif ($request->hasFile('image')) {
+            $data['photo_path'] = $request->file('image')->store('uploads/products', 'public');
+        }
+
+        unset($data['photo'], $data['image'], $data['price_label'], $data['stock_label']);
+
+        if (! array_key_exists('price', $data) && $request->exists('price_label')) {
+            $data['price'] = $this->resolveMoney($request->input('price_label'));
+        }
+        if (! array_key_exists('stock_qty', $data) && $request->exists('stock_label')) {
+            $data['stock_qty'] = $this->resolveStock([
+                'stock_label' => $request->input('stock_label'),
+            ]);
+        }
+        if (array_key_exists('image_path', $data) && ! array_key_exists('photo_path', $data)) {
+            $data['photo_path'] = $data['image_path'];
+        }
+        unset($data['image_path']);
+
+        DB::transaction(function () use ($product, $data): void {
+            $lockedProduct = UmkmProduct::query()
+                ->whereKey($product->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $lockedProduct->fill($data)->save();
+        });
+
+        return ApiResponse::success(
+            ContractFormatter::product($product->fresh()->load('sources.batch')),
+            'Produk berhasil diperbarui'
         );
     }
 

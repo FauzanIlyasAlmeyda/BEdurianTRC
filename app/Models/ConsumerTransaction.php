@@ -28,6 +28,7 @@ class ConsumerTransaction extends Model
         'note',
         'paid_at',
         'processed_at',
+        'trace_snapshot',
     ];
 
     protected function casts(): array
@@ -36,6 +37,7 @@ class ConsumerTransaction extends Model
             'total_amount' => 'decimal:2',
             'paid_at' => 'datetime',
             'processed_at' => 'datetime',
+            'trace_snapshot' => 'array',
         ];
     }
 

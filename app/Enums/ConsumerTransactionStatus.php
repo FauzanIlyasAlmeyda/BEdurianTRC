@@ -5,6 +5,8 @@ namespace App\Enums;
 enum ConsumerTransactionStatus: string
 {
     case Processing = 'processing';
+    case Completed = 'completed';
+    case Cancelled = 'cancelled';
 
     /**
      * @return array<int, string>

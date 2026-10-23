@@ -80,6 +80,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::put('/profile', [UmkmController::class, 'updateProfile']);
         Route::get('/products', [UmkmController::class, 'products']);
         Route::post('/products', [UmkmController::class, 'storeProduct']);
+        Route::put('/products/{code}', [UmkmController::class, 'updateProduct']);
         Route::delete('/products/{code}', [UmkmController::class, 'destroyProduct']);
         Route::get('/batches', [UmkmController::class, 'batches']);
         Route::get('/material-batches', [UmkmController::class, 'materialBatches']);
@@ -100,6 +101,12 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::put('/profile', [ConsumerController::class, 'updateProfile']);
         Route::get('/products', [ConsumerController::class, 'products']);
         Route::get('/products/{code}', [ConsumerController::class, 'showProduct']);
+        Route::get('/products/{code}/validation', [ConsumerProductValidationController::class, 'show']);
+        Route::post('/products/{code}/validation', [ConsumerProductValidationController::class, 'store']);
+        Route::get('/orders', [ConsumerController::class, 'orders']);
+        Route::post('/orders', [ConsumerController::class, 'storeOrder']);
+        Route::post('/orders/{code}/cancel', [ConsumerController::class, 'cancelOrder']);
+        Route::post('/orders/{code}/validate', [ConsumerController::class, 'validateOrder']);
     });
 
 });

@@ -6,6 +6,7 @@ enum ProductStatus: string
 {
     case Aktif = 'aktif';
     case Habis = 'habis';
+    case Nonaktif = 'nonaktif';
 
     /**
      * @return array<int, string>
