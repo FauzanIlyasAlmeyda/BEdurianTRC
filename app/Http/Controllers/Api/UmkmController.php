@@ -10,6 +10,8 @@ use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use App\Support\ContractFormatter;
 use App\Models\CollectorShipment;
+use App\Models\CollectorShipmentSource;
+use App\Models\DistributorSale;
 use App\Models\UmkmProfile;
 use App\Models\HarvestBatch;
 
@@ -114,16 +116,171 @@ class UmkmController extends Controller
         $user = $request->user();
         $this->ensureRole($user, UserRole::Umkm->value);
 
-        return ApiResponse::success(HarvestBatch::query()
+        $sales = DistributorSale::query()
+            ->with(['seller', 'batch'])
+            ->where('recipient_user_id', $user->id)
+            ->where('recipient_role', UserRole::Umkm->value)
+            ->where('status', 'verified')
+            ->get();
+        $shipments = CollectorShipment::query()
+            ->with(['collector', 'sources.batch'])
+            ->where('destination_type', UserRole::Umkm->value)
+            ->where('destination_user_id', $user->id)
+            ->where('status', ShipmentStatus::Completed->value)
+            ->get();
+
+        $linkedBatchIds = $sales->pluck('batch_id')
+            ->merge(
+                CollectorShipmentSource::query()
+                    ->whereIn('collector_shipment_id', $shipments->pluck('id'))
+                    ->pluck('harvest_batch_id')
+            )
+            ->filter()
+            ->unique()
+            ->values();
+
+        $directBatches = HarvestBatch::query()
             ->with('gradeBreakdowns')
             ->where('recipient_user_id', $user->id)
             ->where('recipient_role', UserRole::Umkm->value)
             ->where('status', HarvestBatchStatus::ReceivedByUmkm->value)
+            ->when($linkedBatchIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $linkedBatchIds))
             ->latest()
             ->get()
-            ->map(fn (HarvestBatch $batch): array => ContractFormatter::batch($batch))
+            ->map(fn (HarvestBatch $batch): array => ContractFormatter::batch($batch));
+
+        $saleBatches = $sales->map(fn (DistributorSale $sale): array => [
+            'code' => $sale->code,
+            'farmer_id' => (string) $sale->seller_user_id,
+            'farm_id' => '',
+            'variety' => $sale->batch?->variety ?? 'Durian',
+            'grade' => $sale->batch?->grade ?? '-',
+            'quantity' => (float) ($sale->received_weight_kg ?? $sale->expected_weight_kg ?? 0),
+            'unit' => $sale->batch?->unit ?? 'kg',
+            'fruit_count' => $sale->received_fruit_count ?? $sale->expected_fruit_count,
+            'harvest_date' => $sale->batch?->harvest_date?->toDateString() ?? $sale->created_at?->toDateString(),
+            'farm_name_snapshot' => $sale->seller?->full_name ?? 'Distributor',
+            'status' => HarvestBatchStatus::ReceivedByUmkm->value,
+            'created_at' => $sale->verified_at?->toISOString() ?? $sale->created_at?->toISOString(),
+            'received_quantity_kg' => (float) ($sale->received_weight_kg ?? $sale->expected_weight_kg ?? 0),
+            'received_fruit_count' => $sale->received_fruit_count ?? $sale->expected_fruit_count,
+            'verified_by' => $user->full_name,
+            'verified_by_role' => UserRole::Umkm->value,
+            'verified_at' => $sale->verified_at?->toISOString(),
+        ]);
+
+        $shipmentBatches = $shipments->map(function (CollectorShipment $shipment) use ($user): array {
+            $source = $shipment->sources->first();
+            $batch = $source?->batch;
+            $quantity = (float) ($shipment->total_weight_kg ?? 0);
+            $fruitCount = (int) ($shipment->total_fruit_count ?? 0);
+
+            return [
+                'code' => $shipment->code,
+                'farmer_id' => $batch?->farmer_id === null ? '' : (string) $batch->farmer_id,
+                'farm_id' => $batch?->farm_id === null ? '' : (string) $batch->farm_id,
+                'variety' => $source?->source_variety_snapshot ?? $batch?->variety ?? 'Durian',
+                'grade' => $batch?->grade ?? '-',
+                'quantity' => $quantity,
+                'unit' => 'kg',
+                'fruit_count' => $fruitCount,
+                'harvest_date' => $batch?->harvest_date?->toDateString() ?? $shipment->packaged_at?->toDateString(),
+                'farm_name_snapshot' => $shipment->collector?->full_name ?? 'Pengepul',
+                'status' => HarvestBatchStatus::ReceivedByUmkm->value,
+                'created_at' => $shipment->completed_at?->toISOString() ?? $shipment->packaged_at?->toISOString(),
+                'received_quantity_kg' => $quantity,
+                'received_fruit_count' => $fruitCount,
+                'verified_by' => $user->full_name,
+                'verified_by_role' => UserRole::Umkm->value,
+                'verified_at' => $shipment->completed_at?->toISOString(),
+            ];
+        });
+
+        return ApiResponse::success($directBatches
+            ->concat($saleBatches)
+            ->concat($shipmentBatches)
             ->values()
             ->all());
+    }
+
+    public function receiptHistory(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Umkm->value);
+
+        $farmerReceipts = HarvestBatch::query()
+            ->with('farmer')
+            ->where('recipient_user_id', $user->id)
+            ->where('recipient_role', UserRole::Umkm->value)
+            ->where('status', HarvestBatchStatus::ReceivedByUmkm->value)
+            ->get()
+            ->map(fn (HarvestBatch $batch): array => [
+                'id' => 'farmer-'.$batch->code,
+                'source_type' => UserRole::Petani->value,
+                'trace_code' => $batch->code,
+                'product_name' => 'Durian '.$batch->variety,
+                'supplier_name' => $batch->farmer?->full_name ?? 'Petani',
+                'quantity' => (float) ($batch->received_quantity_kg ?? $batch->quantity_kg ?? 0),
+                'unit' => $batch->unit,
+                'fruit_count' => $batch->received_fruit_count ?? $batch->fruit_count,
+                'received_at' => $batch->verified_at?->toISOString(),
+                'condition' => null,
+                'note' => $batch->quality_notes,
+            ]);
+
+        $saleReceipts = DistributorSale::query()
+            ->with(['seller', 'batch'])
+            ->where('recipient_user_id', $user->id)
+            ->where('recipient_role', UserRole::Umkm->value)
+            ->where('status', 'verified')
+            ->get()
+            ->map(fn (DistributorSale $sale): array => [
+                'id' => 'sale-'.$sale->code,
+                'source_type' => UserRole::Distributor->value,
+                'trace_code' => $sale->code,
+                'product_name' => 'Durian '.($sale->batch?->variety ?? 'Durian'),
+                'supplier_name' => $sale->seller?->full_name ?? 'Distributor',
+                'quantity' => (float) ($sale->received_weight_kg ?? $sale->expected_weight_kg ?? 0),
+                'unit' => $sale->batch?->unit ?? 'kg',
+                'fruit_count' => $sale->received_fruit_count ?? $sale->expected_fruit_count,
+                'received_at' => $sale->verified_at?->toISOString(),
+                'condition' => $sale->condition,
+                'note' => $sale->quality_note ?? $sale->discrepancy_note,
+            ]);
+
+        $shipmentReceipts = CollectorShipment::query()
+            ->with(['collector', 'sources'])
+            ->where('destination_type', UserRole::Umkm->value)
+            ->where('destination_user_id', $user->id)
+            ->where('status', ShipmentStatus::Completed->value)
+            ->get()
+            ->map(function (CollectorShipment $shipment): array {
+                $source = $shipment->sources->first();
+                $variety = $source?->source_variety_snapshot;
+
+                return [
+                    'id' => 'shipment-'.$shipment->code,
+                    'source_type' => UserRole::Pengepul->value,
+                    'trace_code' => $shipment->code,
+                    'product_name' => 'Durian '.($variety ?: 'Durian'),
+                    'supplier_name' => $shipment->collector?->full_name ?? 'Pengepul',
+                    'quantity' => (float) ($shipment->total_weight_kg ?? 0),
+                    'unit' => 'kg',
+                    'fruit_count' => $shipment->total_fruit_count,
+                    'received_at' => $shipment->completed_at?->toISOString(),
+                    'condition' => null,
+                    'note' => $shipment->warehouse_note,
+                ];
+            });
+
+        $receipts = $farmerReceipts
+            ->concat($saleReceipts)
+            ->concat($shipmentReceipts)
+            ->sortByDesc('received_at')
+            ->values()
+            ->all();
+
+        return ApiResponse::success($receipts);
     }
 
     public function incomingShipments(Request $request): JsonResponse

@@ -87,9 +87,9 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::delete('/products/{code}', [UmkmController::class, 'destroyProduct']);
         Route::get('/batches', [UmkmController::class, 'batches']);
         Route::get('/material-batches', [UmkmController::class, 'materialBatches']);
+        Route::get('/receipt-history', [UmkmController::class, 'receiptHistory']);
         Route::get('/incoming-shipments', [UmkmController::class, 'incomingShipments']);
         Route::post('/batches/{code}/receive', [UmkmController::class, 'receiveBatch']);
-        Route::get('/incoming-shipments', [UmkmController::class, 'incomingShipments']);
         Route::post('/incoming-shipments/{code}/receive', [UmkmController::class, 'receiveShipment']);
     });
 
