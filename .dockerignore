@@ -19,3 +19,4 @@ tests
 vendor
 *.zip
 doc
+secrets

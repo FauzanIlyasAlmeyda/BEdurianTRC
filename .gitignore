@@ -4,6 +4,7 @@
 .env.backup
 .env.production
 .env.docker
+/secrets/
 .phpactor.json
 .phpunit.result.cache
 /.fleet

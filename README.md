@@ -57,51 +57,74 @@ dijalankan otomatis saat migrasi. Nilai akun contoh dapat diubah di
 `database/seeders/UserSeeder.php` sebelum digunakan. Seeder hanya membuat akun
 dan profil, tidak membuat data kebun, batch, transaksi, atau data demo lainnya.
 
-### Deploy Laravel dengan Docker di VPS
+### Deploy Laravel ke VPS dengan Docker Compose dan GitHub
 
-Compose menjalankan Laravel dan MariaDB terpisah. Port MariaDB hanya tersedia
-di jaringan internal Docker; Laravel dipublikasikan hanya pada
-`127.0.0.1:8082` agar Nginx host dapat menjadi reverse proxy. File database dan
-foto produk disimpan pada named volume.
+`compose.yaml` menjalankan Laravel di Docker dan menggunakan MySQL Aiven yang
+sudah ada. Tidak ada container database lokal. Port Laravel hanya dibuka di
+`127.0.0.1:8082` agar Nginx host dapat menjadi reverse proxy.
+Foto yang diunggah disimpan pada named volume Docker sehingga tetap ada saat
+container diperbarui.
 
-1. Salin `.env.docker.example` menjadi `.env.docker`, isi password acak yang
-   berbeda untuk pengguna database dan root, serta isi `APP_URL` dengan URL
-   subdomain yang benar. Generate password alfanumerik dengan
-   `openssl rand -hex 32`, lindungi file dengan `chmod 600 .env.docker`, dan
-   jangan commit `.env.docker`.
-2. Bangun image aplikasi:
+#### Persiapan pertama di VPS
+
+1. Instal Docker Engine dan Docker Compose plugin, lalu clone repository backend
+   ke direktori tetap, misalnya `/opt/duriantrace-backend`.
+2. Salin `.env.docker.example` menjadi `.env.docker`, lalu buat `APP_KEY` baru
+   dan unik untuk deployment ini tanpa menampilkan nilainya:
 
    ```sh
-   docker compose --env-file .env.docker build
+   cp .env.docker.example .env.docker
+   APP_KEY_VALUE="$(openssl rand -base64 32 | tr -d '\n')"
+   sed -i "s|^APP_KEY=.*|APP_KEY=base64:${APP_KEY_VALUE}|" .env.docker
+   unset APP_KEY_VALUE
    ```
 
-3. Buat APP_KEY menggunakan image hasil build, lalu tempelkan nilainya ke
-   `APP_KEY` di `.env.docker` sebelum menjalankan migrasi atau aplikasi:
+   Isi `APP_URL` dengan domain API dan lengkapi koneksi Aiven di `.env.docker`.
+   Jangan menyalin atau commit `.env` lokal.
+3. Compose menggunakan sertifikat `docker/ca.pem` dari repository untuk
+   verifikasi TLS Aiven. Pastikan sertifikat ini memang CA untuk project Aiven
+   yang digunakan; jika berbeda, ganti file tersebut dengan CA yang diunduh
+   dari Aiven.
+4. Batasi akses file konfigurasi:
 
    ```sh
-   docker compose --env-file .env.docker run --rm --no-deps app php artisan key:generate --show
+   chmod 600 .env.docker
    ```
 
-4. Nyalakan MariaDB dan jalankan migrasi sekali secara eksplisit:
+5. Bangun image dan jalankan migrasi pada database Aiven:
 
    ```sh
-   docker compose --env-file .env.docker up -d db
-   docker compose --env-file .env.docker run --rm app php artisan migrate --force
-   ```
-
-5. Nyalakan aplikasi dan tes health endpoint lokal:
-
-   ```sh
-   docker compose --env-file .env.docker up -d app
+   docker compose -f compose.yaml --env-file .env.docker build app
+   docker compose -f compose.yaml --env-file .env.docker run --rm app php artisan migrate --force
+   docker compose -f compose.yaml --env-file .env.docker up -d app
    curl --fail http://127.0.0.1:8082/up
    ```
 
-`storage:link` dibuat saat container aplikasi mulai. Migrasi tidak dijalankan
-otomatis saat setiap container restart; jalankan perintah migrasi eksplisit
-setelah deploy perubahan schema. Jangan jalankan `migrate:fresh` atau seeder
-debug pada database production. Nginx host dan service Flask tidak disentuh
-oleh Compose ini; konfigurasi reverse proxy subdomain dilakukan terpisah setelah
-aplikasi sehat.
+`storage:link` dibuat saat container mulai. Jangan menjalankan `migrate:fresh`
+atau seeder debug pada database production. Nginx host tetap perlu diarahkan ke
+`127.0.0.1:8082` dan melayani HTTPS untuk domain API.
+
+#### Deploy otomatis saat ada perubahan di GitHub
+
+Workflow `.github/workflows/deploy.yml` berjalan saat ada push ke branch `main`
+backend. Workflow SSH ke VPS, mengambil perubahan fast-forward dari GitHub,
+membangun image di VPS, menjalankan migrasi, memperbarui container, lalu
+mengecek health endpoint. Build dijalankan otomatis saat deploy; image perlu
+diperbarui setiap kode berubah agar perubahan ikut masuk ke container.
+
+Atur GitHub Actions repository secrets berikut:
+
+- `VPS_HOST`: alamat IP atau hostname VPS.
+- `VPS_USER`: user SSH yang boleh menjalankan Docker.
+- `VPS_SSH_KEY`: private key khusus deployment; pasangkan public key-nya di VPS.
+- `VPS_KNOWN_HOSTS`: baris host key VPS yang sudah diverifikasi.
+- `VPS_DEPLOY_PATH`: direktori clone backend di VPS.
+- `VPS_PORT` (opsional): port SSH; jika tidak diset, workflow memakai `22`.
+
+Clone di VPS perlu dapat mengambil branch `main` dari repository GitHub. Jangan
+menaruh `.env.docker`, password Aiven, atau private key di repository.
+Jika job deployment gagal, periksa log GitHub Actions; perubahan tidak otomatis
+dipasang jika `git pull`, migrasi, atau health check gagal.
 
 ## About Laravel
 
