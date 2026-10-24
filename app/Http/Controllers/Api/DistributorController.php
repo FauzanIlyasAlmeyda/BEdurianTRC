@@ -131,7 +131,7 @@ class DistributorController extends Controller
 
         return ApiResponse::success(
             CollectorShipment::query()
-                ->with('sources.batch')
+                ->with(['collector', 'sources.batch'])
                 ->where('destination_type', 'distributor')
                 ->where(function ($query) use ($user): void {
                     $query->whereNull('destination_user_id')
@@ -151,7 +151,7 @@ class DistributorController extends Controller
         $this->ensureRole($user, UserRole::Distributor->value);
 
         $shipment = CollectorShipment::query()
-            ->with('sources.batch')
+            ->with(['collector', 'sources.batch'])
             ->where('destination_type', 'distributor')
             ->where(function ($query) use ($user): void {
                 $query->whereNull('destination_user_id')

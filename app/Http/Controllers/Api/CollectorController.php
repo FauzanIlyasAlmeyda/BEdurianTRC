@@ -236,11 +236,7 @@ class CollectorController extends Controller
 
         $batches = HarvestBatch::query()
             ->with(['farm', 'events'])
-            ->whereIn('status', [
-                HarvestBatchStatus::Created->value,
-                HarvestBatchStatus::VerifiedByCollector->value,
-                HarvestBatchStatus::InDistribution->value,
-            ])
+            ->where('status', HarvestBatchStatus::VerifiedByCollector->value)
             ->where('recipient_user_id', $user->id)
             ->whereIn('recipient_role', ['collector', UserRole::Pengepul->value])
             ->latest()
@@ -248,16 +244,24 @@ class CollectorController extends Controller
 
         return ApiResponse::success([
             'active_batch_count' => $batches->count(),
-            'total_weight_kg' => (float) $batches->sum('quantity_kg'),
-            'total_fruit_count' => (int) $batches->sum('fruit_count'),
+            'total_weight_kg' => (float) $batches->sum(
+                fn (HarvestBatch $batch) => $batch->received_quantity_kg ?? $batch->quantity_kg
+            ),
+            'total_fruit_count' => (int) $batches->sum(
+                fn (HarvestBatch $batch) => $batch->received_fruit_count ?? $batch->fruit_count
+            ),
             'grade_breakdown' => $batches
-                ->groupBy('grade')
+                ->groupBy(fn (HarvestBatch $batch): ?string => $batch->verified_grade ?: $batch->grade)
                 ->map(function ($group, $grade): array {
                     return [
                         'key' => $grade,
                         'label' => 'Grade ' . $grade,
-                        'total_weight_kg' => (float) $group->sum('quantity_kg'),
-                        'total_fruit_count' => (int) $group->sum('fruit_count'),
+                        'total_weight_kg' => (float) $group->sum(
+                            fn (HarvestBatch $batch) => $batch->received_quantity_kg ?? $batch->quantity_kg
+                        ),
+                        'total_fruit_count' => (int) $group->sum(
+                            fn (HarvestBatch $batch) => $batch->received_fruit_count ?? $batch->fruit_count
+                        ),
                         'batch_count' => $group->count(),
                     ];
                 })
@@ -269,8 +273,12 @@ class CollectorController extends Controller
                     return [
                         'key' => $variety,
                         'label' => $group->first()?->variety ? 'Durian ' . $group->first()->variety : $variety,
-                        'total_weight_kg' => (float) $group->sum('quantity_kg'),
-                        'total_fruit_count' => (int) $group->sum('fruit_count'),
+                        'total_weight_kg' => (float) $group->sum(
+                            fn (HarvestBatch $batch) => $batch->received_quantity_kg ?? $batch->quantity_kg
+                        ),
+                        'total_fruit_count' => (int) $group->sum(
+                            fn (HarvestBatch $batch) => $batch->received_fruit_count ?? $batch->fruit_count
+                        ),
                         'batch_count' => $group->count(),
                     ];
                 })

@@ -422,10 +422,6 @@ class FarmerController extends Controller
             $farm = Farm::query()->whereKey($data['farm_id'])->where('farmer_user_id', $user->id)->firstOrFail();
             $data['farm_name_snapshot'] = $data['farm_name_snapshot'] ?? $farm->name;
         }
-        if ($request->hasFile('photo')) {
-            $data['photo_path'] = $request->file('photo')->store('batch-photos', 'public');
-        }
-        unset($data['photo']);
 
         $batch->fill($data);
         $batch->farm_name_snapshot = $data['farm_name_snapshot'] ?? $batch->farm_name_snapshot;

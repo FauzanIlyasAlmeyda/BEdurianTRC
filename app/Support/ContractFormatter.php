@@ -188,6 +188,12 @@ class ContractFormatter
             'code' => $shipment->code,
             'collector_id' => $shipment->collector_user_id,
             'collectorId' => $shipment->collector_user_id,
+            'collector_name' => $shipment->relationLoaded('collector')
+                ? $shipment->collector?->full_name
+                : null,
+            'collectorName' => $shipment->relationLoaded('collector')
+                ? $shipment->collector?->full_name
+                : null,
             'source_batch_codes' => $sourceBatchCodes,
             'sourceBatchCodes' => $sourceBatchCodes,
             'total_weight_kg' => $shipment->total_weight_kg === null ? null : (float) $shipment->total_weight_kg,

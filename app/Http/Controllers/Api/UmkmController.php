@@ -300,7 +300,7 @@ class UmkmController extends Controller
 
         return ApiResponse::success(
             CollectorShipment::query()
-                ->with('sources.batch')
+                ->with(['collector', 'sources.batch'])
                 ->where('destination_type', UserRole::Umkm->value)
                 ->where('destination_user_id', $user->id)
                 ->where('status', ShipmentStatus::Sent->value)
@@ -356,7 +356,7 @@ class UmkmController extends Controller
                 ]);
             }
 
-            return $shipment->load('sources');
+            return $shipment->load(['collector', 'sources']);
         });
 
         if (! $shipment) {

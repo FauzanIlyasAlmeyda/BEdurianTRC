@@ -16,6 +16,39 @@ class UmkmIncomingShipmentTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_distributor_shipment_responses_include_collector_name(): void
+    {
+        $collector = User::factory()->create([
+            'first_name' => 'Misbah',
+            'last_name' => 'Munir',
+            'role' => UserRole::Pengepul->value,
+        ]);
+        $distributor = $this->makeUser(UserRole::Distributor->value);
+        $shipment = CollectorShipment::create([
+            'code' => 'PGL-COLLECTOR-NAME-001',
+            'collector_user_id' => $collector->id,
+            'destination_type' => UserRole::Distributor->value,
+            'destination_user_id' => $distributor->id,
+            'destination_name' => 'Distributor Uji',
+            'destination_location' => 'Jember',
+            'total_weight_kg' => 12,
+            'total_fruit_count' => 4,
+            'packaged_at' => now(),
+            'sent_at' => now(),
+            'status' => ShipmentStatus::Sent->value,
+        ]);
+
+        $this->asUser($distributor)
+            ->getJson('/api/distributor/shipments')
+            ->assertOk()
+            ->assertJsonPath('data.0.collector_name', 'Misbah Munir');
+
+        $this->asUser($distributor)
+            ->getJson('/api/distributor/shipments/'.$shipment->code)
+            ->assertOk()
+            ->assertJsonPath('data.shipment.collector_name', 'Misbah Munir');
+    }
+
     public function test_umkm_can_list_and_receive_its_sent_collector_shipments(): void
     {
         $umkm = $this->makeUser(UserRole::Umkm->value);

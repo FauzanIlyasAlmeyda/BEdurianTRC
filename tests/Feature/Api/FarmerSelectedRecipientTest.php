@@ -284,7 +284,7 @@ class FarmerSelectedRecipientTest extends TestCase
         $this->asUser($target)
             ->getJson('/api/collector/stock')
             ->assertOk()
-            ->assertJsonPath('data.active_batch_count', 1);
+            ->assertJsonPath('data.active_batch_count', 0);
 
         $this->asUser($target)
             ->postJson('/api/collector/batches/'.$batch->code.'/verify', [
@@ -299,6 +299,24 @@ class FarmerSelectedRecipientTest extends TestCase
             'status' => HarvestBatchStatus::VerifiedByCollector->value,
             'verified_by_user_id' => $target->id,
         ]);
+
+        $this->asUser($target)
+            ->getJson('/api/collector/stock')
+            ->assertOk()
+            ->assertJsonPath('data.active_batch_count', 1)
+            ->assertJsonPath('data.total_weight_kg', 24)
+            ->assertJsonPath('data.total_fruit_count', 9);
+
+        $batch->forceFill([
+            'status' => HarvestBatchStatus::InDistribution->value,
+        ])->save();
+
+        $this->asUser($target)
+            ->getJson('/api/collector/stock')
+            ->assertOk()
+            ->assertJsonPath('data.active_batch_count', 0)
+            ->assertJsonPath('data.total_weight_kg', 0)
+            ->assertJsonPath('data.total_fruit_count', 0);
     }
 
     public function test_collector_cannot_see_or_verify_legacy_batches_without_a_recipient(): void
