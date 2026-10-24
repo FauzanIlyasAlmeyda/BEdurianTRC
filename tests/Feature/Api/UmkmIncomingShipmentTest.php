@@ -143,7 +143,7 @@ class UmkmIncomingShipmentTest extends TestCase
         $this->asUser($umkm)
             ->getJson('/api/umkm/material-batches')
             ->assertOk()
-            ->assertJsonFragment(['code' => $batch->code]);
+            ->assertJsonFragment(['code' => $shipment->code]);
     }
 
     public function test_umkm_cannot_receive_another_umkms_shipment(): void
@@ -170,6 +170,65 @@ class UmkmIncomingShipmentTest extends TestCase
         $this->assertDatabaseHas('collector_shipments', [
             'id' => $shipment->id,
             'status' => ShipmentStatus::Sent->value,
+        ]);
+    }
+
+    public function test_umkm_can_create_product_using_received_shipment_code_as_source(): void
+    {
+        $umkm = $this->makeUser(UserRole::Umkm->value);
+        $collector = $this->makeUser(UserRole::Pengepul->value);
+        $batch = HarvestBatch::create([
+            'code' => 'DRN-SHIPMENT-PRODUCT-001',
+            'farmer_user_id' => $this->makeUser(UserRole::Petani->value)->id,
+            'recipient_user_id' => $umkm->id,
+            'recipient_role' => UserRole::Umkm->value,
+            'farm_name_snapshot' => 'Kebun Produk',
+            'variety' => 'Montong',
+            'quantity_kg' => 28,
+            'unit' => 'kg',
+            'fruit_count' => 10,
+            'status' => HarvestBatchStatus::ReceivedByUmkm->value,
+        ]);
+        $shipment = CollectorShipment::create([
+            'code' => 'PGL-UMKM-PRODUCT-001',
+            'collector_user_id' => $collector->id,
+            'destination_type' => UserRole::Umkm->value,
+            'destination_user_id' => $umkm->id,
+            'destination_name' => 'UMKM Uji',
+            'destination_location' => 'Jember',
+            'total_weight_kg' => 28,
+            'total_fruit_count' => 10,
+            'packaged_at' => now(),
+            'sent_at' => now(),
+            'completed_at' => now(),
+            'status' => ShipmentStatus::Completed->value,
+        ]);
+        CollectorShipmentSource::create([
+            'collector_shipment_id' => $shipment->id,
+            'harvest_batch_id' => $batch->id,
+            'source_code_snapshot' => $batch->code,
+            'source_weight_kg' => 28,
+            'source_fruit_count' => 10,
+        ]);
+
+        $this->asUser($umkm)
+            ->postJson('/api/umkm/products', [
+                'name' => 'Olahan Durian',
+                'category' => 'Makanan',
+                'price' => 25000,
+                'stock_qty' => 5,
+                'source_codes' => [$shipment->code],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.sourceMaterials.0.traceCode', $batch->code);
+
+        $this->assertDatabaseHas('harvest_batches', [
+            'id' => $batch->id,
+            'status' => HarvestBatchStatus::Processed->value,
+        ]);
+        $this->assertDatabaseHas('umkm_product_sources', [
+            'harvest_batch_id' => $batch->id,
+            'source_code_snapshot' => $batch->code,
         ]);
     }
 

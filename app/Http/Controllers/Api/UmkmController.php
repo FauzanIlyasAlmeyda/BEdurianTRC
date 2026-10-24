@@ -434,7 +434,7 @@ class UmkmController extends Controller
             'image' => ['nullable', 'image', 'max:4096'],
             'qr_code_data' => ['nullable', 'string', 'max:150'],
             'source_codes' => ['nullable', 'array'],
-            'source_codes.*' => ['string', 'exists:harvest_batches,code'],
+            'source_codes.*' => ['string', 'max:100'],
         ]);
 
         if ($request->hasFile('photo')) {
@@ -444,14 +444,56 @@ class UmkmController extends Controller
         }
         unset($data['photo'], $data['image']);
 
+        $requestedSourceCodes = array_values(array_unique($data['source_codes'] ?? []));
         $sourceBatches = HarvestBatch::query()
             ->with('farmer')
-            ->whereIn('code', $data['source_codes'] ?? [])
+            ->whereIn('code', $requestedSourceCodes)
             ->get()
             ->keyBy('code');
 
-        if ($sourceBatches->isNotEmpty()) {
-            $invalidSourceCodes = $sourceBatches
+        $sourceShipments = CollectorShipment::query()
+            ->with('sources.batch')
+            ->whereIn('code', $requestedSourceCodes)
+            ->where('destination_type', UserRole::Umkm->value)
+            ->where('destination_user_id', $user->id)
+            ->where('status', ShipmentStatus::Completed->value)
+            ->get();
+        $shipmentCodes = $sourceShipments->pluck('code')->all();
+        $resolvedSourceBatches = $sourceBatches->values()
+            ->concat(
+                $sourceShipments->flatMap(
+                    fn (CollectorShipment $shipment) => $shipment->sources
+                        ->pluck('batch')
+                        ->filter()
+                )
+            )
+            ->unique('id')
+            ->values();
+
+        $unknownSourceCodes = array_values(array_filter(
+            $requestedSourceCodes,
+            fn (string $code): bool => ! $sourceBatches->has($code)
+                && ! in_array($code, $shipmentCodes, true)
+        ));
+        if ($unknownSourceCodes !== []) {
+            return ApiResponse::validation([
+                'source_codes' => ['Satu atau lebih kode bahan baku tidak ditemukan atau bukan milik UMKM ini.'],
+            ]);
+        }
+
+        if ($sourceShipments->contains(
+            fn (CollectorShipment $shipment): bool => $shipment->sources->isEmpty()
+                || $shipment->sources->contains(
+                    fn ($source): bool => $source->batch === null
+                )
+        )) {
+            return ApiResponse::validation([
+                'source_codes' => ['Shipment bahan baku tidak memiliki batch sumber yang valid.'],
+            ]);
+        }
+
+        if ($resolvedSourceBatches->isNotEmpty()) {
+            $invalidSourceCodes = $resolvedSourceBatches
                 ->filter(fn (HarvestBatch $batch): bool => $batch->status !== HarvestBatchStatus::ReceivedByUmkm->value
                     || ($batch->recipient_user_id !== null
                         && ((int) $batch->recipient_user_id !== $user->id
@@ -466,7 +508,7 @@ class UmkmController extends Controller
                 ]);
             }
         }
-        $product = DB::transaction(function () use ($user, $data) {
+        $product = DB::transaction(function () use ($user, $data, $resolvedSourceBatches) {
             $price = $this->resolvePrice($data);
             $stockQty = $this->resolveStock($data);
             $photoPath = $data['photo_path'] ?? $data['image_path'] ?? null;
@@ -487,12 +529,7 @@ class UmkmController extends Controller
                 'code' => CodeGenerator::product($product->id),
             ])->save();
 
-            foreach (($data['source_codes'] ?? []) as $sourceCode) {
-                $batch = HarvestBatch::query()->where('code', $sourceCode)->first();
-                if (! $batch) {
-                    continue;
-                }
-
+            foreach ($resolvedSourceBatches as $batch) {
                 UmkmProductSource::create([
                     'umkm_product_id' => $product->id,
                     'harvest_batch_id' => $batch->id,
