@@ -103,6 +103,10 @@ container diperbarui.
 `storage:link` dibuat saat container mulai. Jangan menjalankan `migrate:fresh`
 atau seeder debug pada database production. Nginx host tetap perlu diarahkan ke
 `127.0.0.1:8082` dan melayani HTTPS untuk domain API.
+File publik di `/storage/` dilayani langsung oleh Nginx, sehingga header CORS
+untuk foto diatur pada `docker/nginx.conf` (bukan hanya middleware Laravel).
+Konfigurasi ini mengizinkan pembacaan lintas-origin tanpa kredensial karena
+foto batch dan farm memang merupakan aset publik.
 
 #### Deploy otomatis saat ada perubahan di GitHub
 
