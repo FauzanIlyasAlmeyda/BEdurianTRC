@@ -180,6 +180,9 @@ class ContractFormatter
         $sourceBatchCodes = $shipment->relationLoaded('sources')
             ? $shipment->sources->map(fn ($source) => $source->source_code_snapshot)->values()->all()
             : [];
+        $sourcePhotoPath = $shipment->relationLoaded('sources')
+            ? $shipment->sources->first()?->batch?->photo_path
+            : null;
 
         return [
             'code' => $shipment->code,
@@ -206,6 +209,10 @@ class ContractFormatter
             'sentAt' => $shipment->sent_at?->toISOString(),
             'completed_at' => $shipment->completed_at?->toISOString(),
             'completedAt' => $shipment->completed_at?->toISOString(),
+            'photo_path' => $sourcePhotoPath,
+            'photoPath' => $sourcePhotoPath,
+            'photo_url' => self::imageUrl($sourcePhotoPath),
+            'photoUrl' => self::imageUrl($sourcePhotoPath),
         ];
     }
 

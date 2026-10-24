@@ -160,6 +160,8 @@ class UmkmController extends Controller
             'fruit_count' => $sale->received_fruit_count ?? $sale->expected_fruit_count,
             'harvest_date' => $sale->batch?->harvest_date?->toDateString() ?? $sale->created_at?->toDateString(),
             'farm_name_snapshot' => $sale->seller?->full_name ?? 'Distributor',
+            'photo_path' => $sale->batch?->photo_path,
+            'photo_url' => ContractFormatter::imageUrl($sale->batch?->photo_path),
             'status' => HarvestBatchStatus::ReceivedByUmkm->value,
             'created_at' => $sale->verified_at?->toISOString() ?? $sale->created_at?->toISOString(),
             'received_quantity_kg' => (float) ($sale->received_weight_kg ?? $sale->expected_weight_kg ?? 0),
@@ -186,6 +188,8 @@ class UmkmController extends Controller
                 'fruit_count' => $fruitCount,
                 'harvest_date' => $batch?->harvest_date?->toDateString() ?? $shipment->packaged_at?->toDateString(),
                 'farm_name_snapshot' => $shipment->collector?->full_name ?? 'Pengepul',
+                'photo_path' => $batch?->photo_path,
+                'photo_url' => ContractFormatter::imageUrl($batch?->photo_path),
                 'status' => HarvestBatchStatus::ReceivedByUmkm->value,
                 'created_at' => $shipment->completed_at?->toISOString() ?? $shipment->packaged_at?->toISOString(),
                 'received_quantity_kg' => $quantity,
@@ -226,6 +230,8 @@ class UmkmController extends Controller
                 'received_at' => $batch->verified_at?->toISOString(),
                 'condition' => null,
                 'note' => $batch->quality_notes,
+                'photo_path' => $batch->photo_path,
+                'photo_url' => ContractFormatter::imageUrl($batch->photo_path),
             ]);
 
         $saleReceipts = DistributorSale::query()
@@ -246,10 +252,12 @@ class UmkmController extends Controller
                 'received_at' => $sale->verified_at?->toISOString(),
                 'condition' => $sale->condition,
                 'note' => $sale->quality_note ?? $sale->discrepancy_note,
+                'photo_path' => $sale->batch?->photo_path,
+                'photo_url' => ContractFormatter::imageUrl($sale->batch?->photo_path),
             ]);
 
         $shipmentReceipts = CollectorShipment::query()
-            ->with(['collector', 'sources'])
+            ->with(['collector', 'sources.batch'])
             ->where('destination_type', UserRole::Umkm->value)
             ->where('destination_user_id', $user->id)
             ->where('status', ShipmentStatus::Completed->value)
@@ -270,6 +278,8 @@ class UmkmController extends Controller
                     'received_at' => $shipment->completed_at?->toISOString(),
                     'condition' => null,
                     'note' => $shipment->warehouse_note,
+                    'photo_path' => $source?->batch?->photo_path,
+                    'photo_url' => ContractFormatter::imageUrl($source?->batch?->photo_path),
                 ];
             });
 
