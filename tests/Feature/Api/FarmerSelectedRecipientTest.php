@@ -349,6 +349,40 @@ class FarmerSelectedRecipientTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_distributor_batch_list_includes_farmer_name(): void
+    {
+        $farmer = $this->makeUser(UserRole::Petani->value, [
+            'first_name' => 'Budi',
+            'last_name' => 'Santoso',
+        ]);
+        $distributor = $this->makeUser(UserRole::Distributor->value);
+        $batch = $this->makeBatch($farmer, $distributor, UserRole::Distributor->value);
+
+        $this->asUser($distributor)
+            ->getJson('/api/distributor/batches')
+            ->assertOk()
+            ->assertJsonPath('data.0.code', $batch->code)
+            ->assertJsonPath('data.0.farmer_name', 'Budi Santoso')
+            ->assertJsonPath('data.0.farmerName', 'Budi Santoso');
+    }
+
+    public function test_collector_batch_list_includes_farmer_name(): void
+    {
+        $farmer = $this->makeUser(UserRole::Petani->value, [
+            'first_name' => 'Budi',
+            'last_name' => 'Santoso',
+        ]);
+        $collector = $this->makeUser(UserRole::Pengepul->value);
+        $batch = $this->makeBatch($farmer, $collector, UserRole::Pengepul->value);
+
+        $this->asUser($collector)
+            ->getJson('/api/collector/batches')
+            ->assertOk()
+            ->assertJsonPath('data.0.code', $batch->code)
+            ->assertJsonPath('data.0.farmer_name', 'Budi Santoso')
+            ->assertJsonPath('data.0.farmerName', 'Budi Santoso');
+    }
+
     public function test_farmer_can_delete_only_their_unverified_batch(): void
     {
         $farmer = $this->makeUser(UserRole::Petani->value);

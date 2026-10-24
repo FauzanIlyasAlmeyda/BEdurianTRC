@@ -308,7 +308,7 @@ class CollectorController extends Controller
         $user = $request->user();
         $this->ensureRole($user, UserRole::Pengepul->value);
 
-        return ApiResponse::success(HarvestBatch::query()->with('gradeBreakdowns')
+        return ApiResponse::success(HarvestBatch::query()->with(['gradeBreakdowns', 'farmer'])
             ->whereIn('status', [HarvestBatchStatus::Created->value, HarvestBatchStatus::VerifiedByCollector->value])
             ->where('recipient_user_id', $user->id)
             ->whereIn('recipient_role', ['collector', UserRole::Pengepul->value])

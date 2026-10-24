@@ -79,6 +79,8 @@ class ContractFormatter
             'code' => $batch->code,
             'farmer_id' => $batch->farmer_user_id,
             'farmerId' => $batch->farmer_user_id,
+            'farmer_name' => $batch->farmer?->full_name,
+            'farmerName' => $batch->farmer?->full_name,
             'farm_id' => $batch->farm_id,
             'farmId' => $batch->farm_id,
             'farm_name_snapshot' => $batch->farm_name_snapshot,

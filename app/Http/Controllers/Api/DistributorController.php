@@ -297,7 +297,7 @@ class DistributorController extends Controller
         $this->ensureRole($user, UserRole::Distributor->value);
 
         return ApiResponse::success(HarvestBatch::query()
-            ->with('gradeBreakdowns')
+            ->with(['gradeBreakdowns', 'farmer'])
             ->where('recipient_user_id', $user->id)
             ->where('recipient_role', UserRole::Distributor->value)
             ->where('status', HarvestBatchStatus::Created->value)
