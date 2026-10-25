@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -491,6 +492,34 @@ class FarmerSelectedRecipientTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.recipient_user_id', $collector->id)
             ->assertJsonPath('data.0.recipient_role', 'collector');
+    }
+
+    public function test_batch_creation_and_collector_verification_use_server_action_timestamps(): void
+    {
+        $farmer = $this->makeUser(UserRole::Petani->value);
+        $collector = $this->makeUser(UserRole::Pengepul->value);
+        $createdAt = Carbon::parse('2026-10-24 08:00:00', 'UTC');
+        $verifiedAt = Carbon::parse('2026-10-24 10:30:00', 'UTC');
+
+        $this->travelTo($createdAt);
+        $created = $this->asUser($farmer)->postJson('/api/farmer/batches', [
+            'recipient_user_id' => $collector->id,
+            'recipient_role' => 'collector',
+            'quantity_kg' => 25,
+            'harvest_date' => '2026-10-23',
+        ])->assertCreated()
+            ->assertJsonPath('data.batch.created_at', $createdAt->toISOString())
+            ->assertJsonPath('data.batch.harvest_date', '2026-10-23');
+
+        $this->travelTo($verifiedAt);
+        $this->asUser($collector)
+            ->postJson('/api/collector/batches/'.$created->json('data.code').'/verify', [
+                'received_quantity_kg' => 24,
+                'received_fruit_count' => 9,
+                'verified_at' => '2020-01-01T00:00:00Z',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.batch.verified_at', $verifiedAt->toISOString());
     }
 
     private function makeUser(string $role, array $attributes = []): User

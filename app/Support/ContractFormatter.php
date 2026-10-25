@@ -87,6 +87,8 @@ class ContractFormatter
             'farmName' => $batch->farm_name_snapshot,
             'variety' => $batch->variety,
             'grade' => $batch->grade,
+            'created_at' => $batch->created_at?->toISOString(),
+            'createdAt' => $batch->created_at?->toISOString(),
             'quantity_kg' => $batch->quantity_kg === null ? null : (float) $batch->quantity_kg,
             'quantityKg' => $batch->quantity_kg === null ? null : (float) $batch->quantity_kg,
             'unit' => $batch->unit,

@@ -331,7 +331,6 @@ class CollectorController extends Controller
             'batch_codes' => ['nullable', 'array', 'min:1'],
             'batch_codes.*' => ['distinct'],
             'batch_codes.*' => ['string', 'exists:harvest_batches,code'],
-            'packaged_at' => ['nullable', 'date'],
             'warehouse_note' => ['nullable', 'string'],
         ]);
 
@@ -373,7 +372,7 @@ class CollectorController extends Controller
                 'destination_location' => $data['destination_location'],
                 'total_weight_kg' => $batches->sum('quantity_kg'),
                 'total_fruit_count' => $batches->sum('fruit_count') ?: 0,
-                'packaged_at' => $data['packaged_at'] ?? now(),
+                'packaged_at' => now(),
                 'warehouse_note' => $data['warehouse_note'] ?? null,
                 'status' => ShipmentStatus::ReadyToShip->value,
             ]);

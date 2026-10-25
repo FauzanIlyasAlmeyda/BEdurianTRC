@@ -12,6 +12,7 @@ use App\Models\Farm;
 use App\Models\HarvestBatch;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class BusinessRulesTest extends TestCase
@@ -213,5 +214,36 @@ class BusinessRulesTest extends TestCase
         $response
             ->assertStatus(422)
             ->assertJsonPath('success', false);
+    }
+
+    public function test_shipment_packaging_uses_server_timestamp(): void
+    {
+        $collector = User::factory()->create(['role' => UserRole::Pengepul->value]);
+        $distributor = User::factory()->create(['role' => UserRole::Distributor->value]);
+        $farmer = User::factory()->create(['role' => UserRole::Petani->value]);
+        $batch = HarvestBatch::create([
+            'code' => 'DRN-2026-100004',
+            'farmer_user_id' => $farmer->id,
+            'recipient_user_id' => $collector->id,
+            'recipient_role' => 'collector',
+            'farm_name_snapshot' => 'Kebun Pagi',
+            'quantity_kg' => 20,
+            'unit' => 'kg',
+            'fruit_count' => 8,
+            'status' => HarvestBatchStatus::VerifiedByCollector->value,
+        ]);
+        $packagedAt = Carbon::parse('2026-10-24 08:00:00', 'UTC');
+        $this->travelTo($packagedAt);
+        $this->withToken($collector->createToken('testing')->plainTextToken)
+            ->postJson('/api/collector/shipment-batches', [
+                'destination_type' => ShipmentDestination::Distributor->value,
+                'destination_user_id' => $distributor->id,
+                'destination_name' => $distributor->full_name,
+                'destination_location' => 'Jember',
+                'source_batch_codes' => [$batch->code],
+                'packaged_at' => '2020-01-01T00:00:00Z',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.shipment.packaged_at', $packagedAt->toISOString());
     }
 }
