@@ -100,6 +100,8 @@ class ContractFormatter
             'photoPath' => $batch->photo_path,
             'photo_url' => self::publicFileUrl($batch->photo_path),
             'photoUrl' => self::publicFileUrl($batch->photo_path),
+            'verification_photo_path' => $batch->verification_photo_path,
+            'verification_photo_url' => self::publicFileUrl($batch->verification_photo_path),
             'status' => $batch->status,
             'recipient_user_id' => $batch->recipient_user_id,
             'recipient_role' => $batch->recipient_role === 'pengepul'

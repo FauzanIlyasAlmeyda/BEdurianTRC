@@ -32,6 +32,7 @@ class HarvestBatch extends Model
         'storage_suggestion',
         'notes',
         'photo_path',
+        'verification_photo_path',
         'received_quantity_kg',
         'received_fruit_count',
         'warehouse_id',

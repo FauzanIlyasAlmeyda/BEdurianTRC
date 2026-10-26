@@ -4,6 +4,8 @@ namespace Tests\Feature\Api;
 
 use App\Enums\HarvestBatchStatus;
 use App\Enums\UserRole;
+use App\Models\CollectorShipment;
+use App\Models\CollectorShipmentSource;
 use App\Models\HarvestBatch;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -16,6 +18,93 @@ use Tests\TestCase;
 class FarmerSelectedRecipientTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_collector_verification_photo_is_stored_and_included_in_public_trace(): void
+    {
+        Storage::fake('public');
+
+        $farmer = $this->makeUser(UserRole::Petani->value);
+        $collector = $this->makeUser(UserRole::Pengepul->value);
+        $batch = $this->makeBatch($farmer, $collector, UserRole::Pengepul->value);
+
+        $response = $this->asUser($collector)
+            ->post('/api/collector/batches/'.$batch->code.'/verify', [
+                'received_quantity_kg' => 24,
+                'received_fruit_count' => 9,
+                'verification_photo' => UploadedFile::fake()->createWithContent(
+                    'receipt.png',
+                    base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/q5sAAAAASUVORK5CYII='),
+                ),
+            ]);
+
+        $response->assertOk();
+        $photoPath = $response->json('data.batch.verification_photo_path');
+        $this->assertNotEmpty($photoPath);
+        Storage::disk('public')->assertExists($photoPath);
+        $response->assertJsonPath(
+            'data.batch.verification_photo_url',
+            Storage::disk('public')->url($photoPath),
+        );
+
+        $shipment = CollectorShipment::create([
+            'code' => 'PGL-2026-000001',
+            'collector_user_id' => $collector->id,
+            'destination_type' => 'distributor',
+            'packaged_at' => now(),
+            'status' => 'sent',
+        ]);
+        CollectorShipmentSource::create([
+            'collector_shipment_id' => $shipment->id,
+            'harvest_batch_id' => $batch->id,
+            'source_code_snapshot' => $batch->code,
+        ]);
+
+        $this->getJson('/api/trace/'.$batch->code)
+            ->assertOk()
+            ->assertJsonPath(
+                'data.batch.verification_photo_url',
+                Storage::disk('public')->url($photoPath),
+            )
+            ->assertJsonPath(
+                'data.shipment_history.0.code',
+                'PGL-2026-000001',
+            )
+            ->assertJsonPath(
+                'data.shipment_history.0.photo_url',
+                Storage::disk('public')->url($photoPath),
+            );
+    }
+
+    public function test_pgl_trace_does_not_use_farmer_photo_when_collector_verification_photo_is_missing(): void
+    {
+        $farmer = $this->makeUser(UserRole::Petani->value);
+        $collector = $this->makeUser(UserRole::Pengepul->value);
+        $batch = $this->makeBatch($farmer, $collector, UserRole::Pengepul->value);
+        $batch->forceFill([
+            'photo_path' => 'uploads/batches/farmer-photo.jpg',
+            'status' => HarvestBatchStatus::VerifiedByCollector->value,
+            'verified_by_user_id' => $collector->id,
+            'verified_at' => now(),
+        ])->save();
+
+        $shipment = CollectorShipment::create([
+            'code' => 'PGL-2026-000002',
+            'collector_user_id' => $collector->id,
+            'destination_type' => 'distributor',
+            'packaged_at' => now(),
+            'status' => 'sent',
+        ]);
+        CollectorShipmentSource::create([
+            'collector_shipment_id' => $shipment->id,
+            'harvest_batch_id' => $batch->id,
+            'source_code_snapshot' => $batch->code,
+        ]);
+
+        $this->getJson('/api/trace/'.$batch->code)
+            ->assertOk()
+            ->assertJsonPath('data.batch.photo_url', '/storage/uploads/batches/farmer-photo.jpg')
+            ->assertJsonPath('data.shipment_history.0.photo_url', null);
+    }
 
     public function test_registration_assigns_and_serializes_a_long_numeric_public_account_id(): void
     {

@@ -519,6 +519,7 @@ class CollectorController extends Controller
             'quality_notes' => ['nullable', 'string'],
             'verified_by' => ['nullable', 'string', 'max:150'],
             'warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('owner_user_id', $user->id)->where('owner_role', UserRole::Pengepul->value)],
+            'verification_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
         ]);
 
         $breakdowns = collect($data['grade_breakdown'] ?? []);
@@ -539,13 +540,16 @@ class CollectorController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($batch, $data, $user): void {
+        DB::transaction(function () use ($batch, $data, $user, $request): void {
             $batch->forceFill([
                 'status' => HarvestBatchStatus::VerifiedByCollector->value,
                 'received_quantity_kg' => $data['received_quantity_kg'],
                 'received_fruit_count' => $data['received_fruit_count'],
                 'warehouse_id' => $data['warehouse_id'] ?? null,
                 'quality_notes' => $data['quality_notes'] ?? null,
+                'verification_photo_path' => $request->file('verification_photo')
+                    ?->store('uploads/verification', 'public')
+                    ?? $batch->verification_photo_path,
                 'verified_by_user_id' => $user->id,
                 'verified_at' => now(),
             ])->save();

@@ -60,7 +60,7 @@ class PublicTraceController extends Controller
         }
 
         $shipmentHistory = CollectorShipmentSource::query()
-            ->with('shipment.collector')
+            ->with(['shipment.collector', 'batch'])
             ->where('harvest_batch_id', $batch->id)
             ->get()
             ->groupBy(fn (CollectorShipmentSource $source): string => (string) ($source->shipment?->code ?? $source->collector_shipment_id))
@@ -68,6 +68,11 @@ class PublicTraceController extends Controller
                 /** @var CollectorShipmentSource $firstSource */
                 $firstSource = $sources->first();
                 $shipment = $firstSource?->shipment;
+                $photoSource = $sources->first(
+                    fn (CollectorShipmentSource $source): bool => filled(
+                        $source->batch?->verification_photo_path
+                    )
+                ) ?? $firstSource;
 
                 return [
                     'code' => $shipment?->code,
@@ -82,6 +87,11 @@ class PublicTraceController extends Controller
                         ->unique()
                         ->values()
                         ->all(),
+                    'total_weight_kg' => $shipment?->total_weight_kg === null ? null : (float) $shipment->total_weight_kg,
+                    'total_fruit_count' => $shipment?->total_fruit_count,
+                    'photo_url' => ContractFormatter::imageUrl(
+                        $photoSource?->batch?->verification_photo_path
+                    ),
                     'packaged_at' => $shipment?->packaged_at?->toISOString(),
                     'sent_at' => $shipment?->sent_at?->toISOString(),
                     'completed_at' => $shipment?->completed_at?->toISOString(),
