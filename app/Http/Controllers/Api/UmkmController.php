@@ -9,6 +9,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Support\ApiResponse;
 use App\Support\ContractFormatter;
+use App\Support\ProfileAvatarStorage;
 use App\Models\CollectorShipment;
 use App\Models\CollectorShipmentSource;
 use App\Models\DistributorSale;
@@ -76,6 +77,29 @@ class UmkmController extends Controller
         ]);
 
         return ApiResponse::success($profile, 'Profil UMKM diperbarui');
+    }
+
+    public function updateAvatar(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Umkm->value);
+        ProfileAvatarStorage::validate($request);
+
+        $profile = UmkmProfile::firstOrCreate([
+            'user_id' => $user->id,
+        ], [
+            'name' => $user->full_name,
+            'owner_name' => $user->full_name,
+        ]);
+        $profile->image_path = ProfileAvatarStorage::update(
+            $request,
+            $profile->image_path,
+        );
+        $profile->save();
+
+        return ApiResponse::success([
+            'profile' => $profile,
+        ], 'Foto profil UMKM diperbarui');
     }
 
     public function products(Request $request): JsonResponse

@@ -13,7 +13,7 @@ class ProfileAvatarTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_each_consumer_role_can_upload_and_remove_a_profile_avatar(): void
+    public function test_each_profile_role_can_upload_and_remove_a_profile_avatar(): void
     {
         Storage::fake('public');
 
@@ -22,6 +22,7 @@ class ProfileAvatarTest extends TestCase
             UserRole::Pengepul->value => ['/api/collector/profile/avatar', 'profile.avatar_path'],
             UserRole::Konsumen->value => ['/api/consumer/profile/avatar', 'avatar_path'],
             UserRole::Distributor->value => ['/api/distributor/profile/avatar', 'avatar_path'],
+            UserRole::Umkm->value => ['/api/umkm/profile/avatar', 'profile.image_path'],
         ];
 
         foreach ($profiles as $role => [$endpoint, $jsonPath]) {

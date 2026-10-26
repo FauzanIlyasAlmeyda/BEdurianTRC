@@ -21,6 +21,7 @@ use App\Support\CodeGenerator;
 use App\Support\Traceability;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
@@ -284,6 +285,33 @@ class CollectorController extends Controller
                 })
                 ->values()
                 ->all(),
+        ]);
+    }
+
+    public function dailyIntakeSummary(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureRole($user, UserRole::Pengepul->value);
+
+        $data = $request->validate([
+            'start_at' => ['required', 'date'],
+            'end_at' => ['required', 'date', 'after:start_at'],
+        ]);
+        $startAt = Carbon::parse($data['start_at'])->utc();
+        $endAt = Carbon::parse($data['end_at'])->utc();
+
+        $receivedToday = HarvestBatch::query()
+            ->where('verified_by_user_id', $user->id)
+            ->whereNotNull('verified_at')
+            ->where('verified_at', '>=', $startAt)
+            ->where('verified_at', '<', $endAt)
+            ->get(['received_quantity_kg', 'quantity_kg']);
+
+        return ApiResponse::success([
+            'batch_count' => $receivedToday->count(),
+            'total_weight_kg' => (float) $receivedToday->sum(
+                fn (HarvestBatch $batch) => $batch->received_quantity_kg ?? $batch->quantity_kg
+            ),
         ]);
     }
 

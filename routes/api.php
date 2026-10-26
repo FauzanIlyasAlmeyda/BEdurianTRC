@@ -45,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function(){
         Route::put('/profile', [CollectorController::class, 'updateProfile']);
         Route::post('/profile/avatar', [CollectorController::class, 'updateAvatar']);
         Route::get('/stock', [CollectorController::class, 'stock']);
+        Route::get('/daily-intake-summary', [CollectorController::class, 'dailyIntakeSummary']);
         Route::get('/batches', [CollectorController::class, 'batches']);
         Route::get('/warehouses', [CollectorController::class, 'warehouses']);
         Route::get('/shipment-recipients', [CollectorController::class, 'shipmentRecipients']);
@@ -81,6 +82,7 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::prefix('umkm')->group(function (): void {
         Route::get('/profile', [UmkmController::class, 'profile']);
         Route::put('/profile', [UmkmController::class, 'updateProfile']);
+        Route::post('/profile/avatar', [UmkmController::class, 'updateAvatar']);
         Route::get('/products', [UmkmController::class, 'products']);
         Route::post('/products', [UmkmController::class, 'storeProduct']);
         Route::put('/products/{code}', [UmkmController::class, 'updateProduct']);
