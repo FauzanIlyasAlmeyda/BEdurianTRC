@@ -3,6 +3,8 @@
 namespace Tests\Feature\Api;
 
 use App\Enums\UserRole;
+use App\Models\Farm;
+use App\Models\HarvestBatch;
 use App\Models\UmkmProduct;
 use App\Models\UmkmProductSource;
 use App\Models\User;
@@ -71,12 +73,29 @@ class ConsumerProductValidationTest extends TestCase
     public function test_consumer_product_detail_exposes_source_batch_trace_codes(): void
     {
         $consumer = User::factory()->create(['role' => UserRole::Konsumen->value]);
+        $farmer = User::factory()->create([
+            'role' => UserRole::Petani->value,
+            'first_name' => 'Budi',
+            'last_name' => 'Santoso',
+        ]);
+        $farm = Farm::create([
+            'farmer_user_id' => $farmer->id,
+            'name' => 'Kebun Durian Makmur',
+        ]);
+        $batch = HarvestBatch::create([
+            'code' => 'DRN-2026-123456',
+            'farmer_user_id' => $farmer->id,
+            'farm_id' => $farm->id,
+            'farm_name_snapshot' => $farm->name,
+            'variety' => 'Montong',
+            'grade' => 'A',
+        ]);
         $product = $this->makeProduct();
-        $sourceCode = 'DRN-SOURCE-123456';
 
         UmkmProductSource::create([
             'umkm_product_id' => $product->id,
-            'source_code_snapshot' => $sourceCode,
+            'harvest_batch_id' => $batch->id,
+            'source_code_snapshot' => $batch->code,
             'weight_kg' => 5,
             'fruit_count' => 3,
         ]);
@@ -86,8 +105,25 @@ class ConsumerProductValidationTest extends TestCase
             ->assertOk();
         $response->assertJsonPath(
             'data.product.sourceMaterials.0.traceCode',
-            $sourceCode,
-        );
+            $batch->code,
+        )
+            ->assertJsonPath(
+                'data.product.trace_sources.0.batch_code',
+                $batch->code,
+            )
+            ->assertJsonPath(
+                'data.product.trace_sources.0.farmer_name',
+                'Budi Santoso',
+            )
+            ->assertJsonPath(
+                'data.product.trace_sources.0.farm_name',
+                'Kebun Durian Makmur',
+            )
+            ->assertJsonPath(
+                'data.product.trace_sources.0.variety',
+                'Montong',
+            )
+            ->assertJsonPath('data.product.trace_sources.0.grade', 'A');
     }
 
     public function test_umkm_product_photo_is_saved_and_exposed_to_consumers(): void

@@ -22,6 +22,7 @@ class ConsumerOrderTest extends TestCase
     {
         $consumer = User::factory()->create(['role' => UserRole::Konsumen->value]);
         [$umkm, $product, $batch] = $this->createProductWithSource();
+        $product->update(['photo_path' => 'products/order-photo.webp']);
 
         $response = $this->withToken($consumer->createToken('testing')->plainTextToken)
             ->postJson('/api/consumer/orders', [
@@ -33,6 +34,10 @@ class ConsumerOrderTest extends TestCase
             ->assertJsonPath('data.product_name', $product->name)
             ->assertJsonPath('data.quantity', 2)
             ->assertJsonPath('data.total_amount', 136000)
+            ->assertJsonPath(
+                'data.product_image_url',
+                fn ($url) => str_ends_with($url, '/storage/products/order-photo.webp')
+            )
             ->assertJsonPath('data.trace_sources.0.batch_code', $batch->code)
             ->assertJsonPath('data.trace_sources.0.timeline.0.title', 'Batch dibuat petani')
             ->assertJsonPath('data.umkm_name', $umkm->full_name);
@@ -41,6 +46,22 @@ class ConsumerOrderTest extends TestCase
             'id' => $product->id,
             'stock_qty' => 1,
         ]);
+
+        $traceTransaction = $this->getJson('/api/trace/' . $batch->code)
+            ->assertOk()
+            ->assertJsonPath(
+                'data.consumer_transactions.0.code',
+                $response->json('data.code')
+            )
+            ->json('data.consumer_transactions.0');
+        $this->assertEqualsCanonicalizing([
+            'code',
+            'product_name',
+            'quantity',
+            'status',
+            'created_at',
+            'processed_at',
+        ], array_keys($traceTransaction));
 
         $this->withToken($consumer->createToken('orders')->plainTextToken)
             ->getJson('/api/consumer/orders')
@@ -51,7 +72,7 @@ class ConsumerOrderTest extends TestCase
     public function test_consumer_can_cancel_order_once_and_stock_is_returned(): void
     {
         $consumer = User::factory()->create(['role' => UserRole::Konsumen->value]);
-        [, $product] = $this->createProductWithSource();
+        [, $product, $batch] = $this->createProductWithSource();
         $token = $consumer->createToken('testing')->plainTextToken;
         $code = $this->withToken($token)
             ->postJson('/api/consumer/orders', [
@@ -70,6 +91,10 @@ class ConsumerOrderTest extends TestCase
             'id' => $product->id,
             'stock_qty' => 3,
         ]);
+
+        $this->getJson('/api/trace/' . $batch->code)
+            ->assertOk()
+            ->assertJsonCount(0, 'data.consumer_transactions');
 
         $this->withToken($token)
             ->postJson('/api/consumer/orders/'.$code.'/cancel')
@@ -111,6 +136,7 @@ class ConsumerOrderTest extends TestCase
     {
         $consumer = User::factory()->create(['role' => UserRole::Konsumen->value]);
         [$umkm, $product] = $this->createProductWithSource();
+        $product->update(['photo_path' => 'products/order-photo.webp']);
         $code = $this->withToken($consumer->createToken('testing')->plainTextToken)
             ->postJson('/api/consumer/orders', [
                 'product_code' => $product->code,
@@ -130,7 +156,15 @@ class ConsumerOrderTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.code', $code)
             ->assertJsonPath('data.0.product_code', $product->code)
+            ->assertJsonPath(
+                'data.0.product_image_url',
+                fn ($url) => str_ends_with($url, '/storage/products/order-photo.webp')
+            )
             ->assertJsonPath('data.0.trace_sources.0.batch_code', 'DRN-ORDER-001');
+
+        $this->getJson('/api/trace/DRN-ORDER-001')
+            ->assertOk()
+            ->assertJsonPath('data.consumer_transactions.0.code', $code);
     }
 
     public function test_consumer_cannot_order_inactive_or_unavailable_products(): void

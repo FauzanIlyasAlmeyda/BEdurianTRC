@@ -98,7 +98,7 @@ class ConsumerController extends Controller
         $this->ensureRole($request->user(), UserRole::Konsumen->value);
 
         $product = UmkmProduct::query()
-            ->with(['sources.batch.events', 'umkm.umkmProfile'])
+            ->with(['sources.batch.events', 'sources.batch.farmer', 'umkm.umkmProfile'])
             ->where('code', $code)
             ->where('status', ProductStatus::Aktif->value)
             ->firstOrFail();
@@ -158,12 +158,15 @@ class ConsumerController extends Controller
                 ]);
             }
 
+            $traceSources = $this->productTraceSources($product);
             $traceSnapshot = [
                 'product_code' => $product->code,
                 'product_name' => $product->name,
+                'product_image_url' => ContractFormatter::imageUrl($product->photo_path),
                 'umkm_name' => $product->umkm?->umkmProfile?->name
                     ?? $product->umkm?->full_name,
-                'sources' => $this->productTraceSources($product),
+                'source_batch_codes' => array_column($traceSources, 'batch_code'),
+                'sources' => $traceSources,
             ];
 
             $transaction = ConsumerTransaction::create([
@@ -339,6 +342,7 @@ class ConsumerController extends Controller
             'id' => $transaction->code,
             'status' => $transaction->status,
             'product_code' => $trace['product_code'] ?? null,
+            'product_image_url' => $trace['product_image_url'] ?? null,
             'product_name' => $transaction->product_name_snapshot
                 ?? $trace['product_name']
                 ?? 'Produk UMKM',

@@ -6,6 +6,7 @@ use App\Enums\HarvestBatchStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CollectorShipment;
 use App\Models\CollectorShipmentSource;
+use App\Models\ConsumerTransaction;
 use App\Models\DistributorSale;
 use App\Models\HarvestBatch;
 use App\Models\HarvestBatchEvent;
@@ -149,6 +150,36 @@ class PublicTraceController extends Controller
         }
         $trace['source_batches'] = [];
         $trace['downstream_products'] = $this->downstreamProducts($batch->id);
+        $trace['consumer_transactions'] = ConsumerTransaction::query()
+            ->whereIn('status', ['processing', 'completed'])
+            ->where(function ($query) use ($batch): void {
+                $query
+                    ->whereHas('product.sources', fn ($sourceQuery) => $sourceQuery
+                        ->where('harvest_batch_id', $batch->id))
+                    ->orWhereJsonContains(
+                        'trace_snapshot->source_batch_codes',
+                        $batch->code
+                    );
+            })
+            ->orderBy('created_at')
+            ->get([
+                'code',
+                'product_name_snapshot',
+                'quantity',
+                'status',
+                'created_at',
+                'processed_at',
+            ])
+            ->map(fn (ConsumerTransaction $transaction): array => [
+                'code' => $transaction->code,
+                'product_name' => $transaction->product_name_snapshot,
+                'quantity' => (int) $transaction->quantity,
+                'status' => $transaction->status,
+                'created_at' => $transaction->created_at?->toISOString(),
+                'processed_at' => $transaction->processed_at?->toISOString(),
+            ])
+            ->values()
+            ->all();
         $trace['shipment_history'] = $shipmentHistory;
         $trace['handover_history'] = DistributorSale::query()
             ->with(['seller', 'recipient'])

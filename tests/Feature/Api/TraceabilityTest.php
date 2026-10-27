@@ -69,6 +69,7 @@ class TraceabilityTest extends TestCase
                     'events',
                     'source_batches',
                     'downstream_products',
+                    'consumer_transactions',
                     'shipment_history',
                     'public_url',
                     'blockchain',
