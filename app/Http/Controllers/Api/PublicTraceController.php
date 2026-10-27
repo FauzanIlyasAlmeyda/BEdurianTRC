@@ -81,6 +81,7 @@ class PublicTraceController extends Controller
                     'destination_type' => $shipment?->destination_type,
                     'destination_name' => $shipment?->destination_name,
                     'destination_location' => $shipment?->destination_location,
+                    'warehouse_note' => $shipment?->warehouse_note,
                     'source_batch_codes' => $sources
                         ->pluck('source_code_snapshot')
                         ->filter()
